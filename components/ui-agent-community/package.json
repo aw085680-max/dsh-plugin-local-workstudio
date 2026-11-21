@@ -1,0 +1,61 @@
+{
+  "name": "@local-workstudio/ui-agent-community",
+  "description": "Agent Community UI — Bot list, room list, chat panel, run status",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@local-workstudio/agent-community",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-client-ui-primitives": "*"
+  },
+  "author": "leochang <leochang@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Leo-sail/dsh-plugin-agent-collaboration.git",
+    "directory": "packages/ui/ui-agent-community"
+  },
+  "homepage": "https://github.com/Leo-sail/dsh-plugin-agent-collaboration/tree/main/packages/ui/ui-agent-community#readme",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "bot",
+    "agent"
+  ],
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-ui-primitives": {
+      "optional": true
+    }
+  }
+}
