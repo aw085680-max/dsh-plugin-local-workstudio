@@ -2,6 +2,7 @@
   "name": "@local-workstudio/ui-agent-community",
   "description": "Agent Community UI — Bot list, room list, chat panel, run status",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -39,13 +40,16 @@
     "@deepseek-ai/cordis": "*",
     "@deepseek-ai/dsh-client-ui-primitives": "*"
   },
-  "author": "leochang <leochang@gmail.com>",
+  "author": {
+    "name": "leochang",
+    "url": "https://github.com/Leo-sail"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Leo-sail/dsh-plugin-agent-collaboration.git",
-    "directory": "packages/ui/ui-agent-community"
+    "url": "git+https://github.com/aw085680-max/dsh-plugin-local-workstudio.git",
+    "directory": "components/ui-agent-community"
   },
-  "homepage": "https://github.com/Leo-sail/dsh-plugin-agent-collaboration/tree/main/packages/ui/ui-agent-community#readme",
+  "homepage": "https://github.com/aw085680-max/dsh-plugin-local-workstudio/tree/main/components/ui-agent-community",
   "keywords": [
     "dsh",
     "dsh-plugin",
