@@ -2,6 +2,7 @@
   "name": "@local-workstudio/tool-agent-community",
   "description": "Model-facing tools for Agent Community — Bot and room management via ctx.agentCommunity",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -24,13 +25,16 @@
     "@deepseek-ai/schemastery": "*",
     "@local-workstudio/agent-community": "*"
   },
-  "author": "leochang <leochang@gmail.com>",
+  "author": {
+    "name": "leochang",
+    "url": "https://github.com/Leo-sail"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Leo-sail/dsh-plugin-agent-collaboration.git",
-    "directory": "packages/tools/tool-agent-community"
+    "url": "git+https://github.com/aw085680-max/dsh-plugin-local-workstudio.git",
+    "directory": "components/tool-agent-community"
   },
-  "homepage": "https://github.com/Leo-sail/dsh-plugin-agent-collaboration/tree/main/packages/tools/tool-agent-community#readme",
+  "homepage": "https://github.com/aw085680-max/dsh-plugin-local-workstudio/tree/main/components/tool-agent-community",
   "keywords": [
     "dsh",
     "dsh-plugin",
