@@ -1,33 +1,15 @@
 # Third-party notices
 
-The **browser half** of `@dsh-plugin-agent-community/ui-agent-community` bundles the libraries
-below into its single-file client bundle (`lib/client.js`), because the DSH client module system
-serves exactly one script per plugin and re-reads no sibling assets. Their licenses apply to those
-portions of that artifact; the Node-side packages ship no third-party code.
+Local Agent Studio derives from [Agent Collaboration v0.5.0](https://github.com/Leo-sail/dsh-plugin-agent-collaboration/tree/v0.5.0) by leochang (Leo-sail). See the [MIT license](LICENSE) for the upstream copyright notice.
 
-| Library | Version | License | Upstream |
+The browser bundle at `components/ui-agent-community/lib/client.js` includes the libraries below. Their license texts accompany this distribution in `licenses/`.
+
+| Library | Version | Included license | Upstream |
 | --- | --- | --- | --- |
-| [PDF.js](https://github.com/mozilla/pdf.js) (`pdfjs-dist`) | 6.3.289 | Apache-2.0 | Mozilla |
-| [docx-preview](https://github.com/zVolodymyr/docxjs) | 0.3.7 | Apache-2.0 | Volodymyr Baydalka |
-| [JSZip](https://github.com/Stuk/jszip) | 3.10.2 | MIT (dual-licensed MIT / GPLv3; used under MIT) | Stuart Knightley, David Duponchel, Franz Buchinger, António Afonso |
-| [SheetJS Community Edition](https://github.com/SheetJS/sheetjs) (`xlsx`) | 0.18.5 | Apache-2.0 | SheetJS LLC |
+| PDF.js (`pdfjs-dist`) | 6.3.289 | [Apache-2.0](licenses/PDF.js.txt) | [Mozilla](https://github.com/mozilla/pdf.js) |
+| docx-preview | 0.3.7 | [Apache-2.0](licenses/docx-preview.txt) | [Volodymyr Baydalka](https://github.com/zVolodymyr/docxjs) |
+| JSZip | 3.10.2 | [MIT selection](licenses/JSZip-MIT.txt) | [Stuart Knightley, David Duponchel, Franz Buchinger, António Afonso](https://github.com/Stuk/jszip) |
+| SheetJS Community Edition (`xlsx`) | 0.18.5 | [Apache-2.0](licenses/SheetJS.txt) | [SheetJS LLC](https://github.com/SheetJS/sheetjs) |
+| React JSX runtime | — | [MIT](licenses/React.txt) | [React](https://github.com/facebook/react) |
 
-The complete license texts are distributed with each npm package under `node_modules/<package>/`
-in a checkout, and in the upstream repositories linked above. No code from these projects is
-modified beyond normal bundling (tree-shaking, minification already present in the pdf.js build).
-
-PDF.js note: the plugin inlines the PDF.js **worker** module source as a string and starts it as a
-Blob-URL module worker. That is the same deployment shape PDF.js itself supports; the worker is
-unmodified. The plugin bundles no PDF.js standard fonts, CMaps or WASM decoders — PDFs that rely on
-non-embedded standard fonts use the browser's system fonts, and exotic image codecs may warn.
-
-## Local Agent Studio distribution
-
-This derivative preserves the upstream attribution above. Complete notices for the
-redistributed browser dependencies are included with this package.
-
-- PDF.js — [Apache-2.0](licenses/PDF.js.txt)
-- docx-preview — [Apache-2.0](licenses/docx-preview.txt)
-- JSZip — [MIT selection](licenses/JSZip-MIT.txt)
-- SheetJS CE — [Apache-2.0](licenses/SheetJS.txt)
-- React JSX runtime — [MIT](licenses/React.txt)
+The PDF.js worker is bundled as a string and starts as a Blob-URL module worker. The bundle omits PDF.js standard fonts, CMaps and WASM decoders. PDFs that rely on non-embedded standard fonts use the browser's system fonts, and some image codecs may warn.

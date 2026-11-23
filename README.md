@@ -4,11 +4,11 @@
 
 - 插件包名为 **dsh-plugin-local-workstudio**，版本为 **1.0.0**，基于 r20。
 - 首次安装从空白工作区开始。使用时请配置自己的模型、Bot 和工作目录。
-- 本版在 Windows x64 上使用 DeepSeek Harness Desktop 0.2.2-rc.5 验证。Windows 桌面提醒和资源管理器入口依赖 Windows。
+- 最低宿主要求为 DeepSeek Harness 0.2.2-rc.5。本版运行功能已在 Windows x64 的 Desktop 0.2.2-rc.5 上验证。Windows 桌面提醒和资源管理器入口依赖 Windows。
 
 ## 安装
 
-将发布的压缩包下载到本机，通过 DSH CLI 安装。下面以桌面默认的 desktop Profile 为例。请关掉 DSH 再安装，并在安装成功后重新启动桌面客户端。
+从 [v1.0.0 Release](https://github.com/aw085680-max/dsh-plugin-local-workstudio/releases/tag/v1.0.0) 下载 [安装包](https://github.com/aw085680-max/dsh-plugin-local-workstudio/releases/download/v1.0.0/dsh-plugin-local-workstudio-1.0.0.tgz) 和 [SHA-256 校验文件](https://github.com/aw085680-max/dsh-plugin-local-workstudio/releases/download/v1.0.0/dsh-plugin-local-workstudio-1.0.0.tgz.sha256)。将两份文件放在同一目录。退出 DSH，在该目录运行以下命令，安装完成后重新启动桌面客户端。
 
 ~~~powershell
 dsh plugin --profile desktop add .\dsh-plugin-local-workstudio-1.0.0.tgz --offline
@@ -42,7 +42,7 @@ dsh plugin --profile desktop remove dsh-plugin-local-workstudio
 
 ## 构建
 
-仓库包含可直接打包的 JavaScript 模块、类型声明和 Windows 辅助程序的 C# 源码。在 Windows 上修改 C# 后，可运行 native/build-windows.ps1 重编两个辅助程序。仓库根目录执行 npm pack --offline --ignore-scripts 生成安装包。
+仓库包含可直接打包的 JavaScript 模块、类型声明和 Windows 辅助程序的 C# 源码。在 Windows 上修改 C# 后，可运行 native/build-windows.ps1 重编两个辅助程序。在仓库根目录运行 `npm pack --offline --ignore-scripts`，生成 `dsh-plugin-local-workstudio-1.0.0.tgz`。
 
 ## 作者与许可证
 
