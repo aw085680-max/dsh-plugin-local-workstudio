@@ -1,7 +1,7 @@
 {
   "name": "@local-workstudio/tool-agent-community",
   "description": "Model-facing tools for Agent Community — Bot and room management via ctx.agentCommunity",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "main": "lib/index.js",

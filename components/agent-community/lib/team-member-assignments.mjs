@@ -108,7 +108,7 @@ export class TeamMemberAssignments {
     message.memberAssignments = parsed.assignments.map((row, index) => ({
       ...row, taskId: index === 0 ? batchTaskId : batchTaskId + ":member:" + row.botId
     }));
-    message.mentions = ids;
+    if(!message.routeDecision?.sequentialMembers)message.mentions = ids;
     message.authorizationSnapshot = { ...message.authorizationSnapshot, members: ids };
     message.taskRef = batchTaskId;
     message.mentionTask = batchTaskId;
@@ -143,6 +143,11 @@ export class TeamMemberAssignments {
             reviewer: null, supervisor: null, order: [assignment.botId], confirmers: [],
             assignment: { ...assignment, batchTaskId: message.taskRef, sourceMessageId: message.id } };
           const authorization = { ...message.authorizationSnapshot, members: [assignment.botId] };
+          if (assignment.singleFile && message.routeDecision?.intent==="single-file" &&
+              message.routeDecision.recipientId===assignment.botId && message.memberAssignments.length===1) {
+            authorization.documentWorkOrder={kind:"single-file",taskId:assignment.taskId,roomId:message.roomId,
+              origin:message.id,writer:assignment.botId,deliverer:assignment.botId};
+          }
           record = await team.store.create(assignment.taskId, [team.events("TASK_CREATED", {
             roomId: message.roomId, authorization, permissions, roles, goalRef, messageRef: goalRef
           })]);
@@ -167,7 +172,13 @@ export class TeamMemberAssignments {
       null : this.svc.state.messages.find(row => row.id === state.activeAuthorizationId && row.roomId === state.roomId);
     if (!goal || dependencies.some(item => !item.reply)) throw Error("成员的原要求或前置回复未就绪。");
     const prior = previous && JSON.parse((await this.team.store.readBlob(previous)).toString());
-    return { purpose: "member-assignment", work: assignment.work, originalRequirement: goal.text,
+    return { purpose: "member-assignment", ...(assignment.singleFile ? {singleFile:true,
+      attachments:goal.fileSources?.map((item,i)=>item.readMode==="full-text"?item:{...item,path:goal.attachments?.[i]?.path}),
+      history:this.svc.state.messages.filter(m=>m.roomId===goal.roomId && m.sequence<goal.sequence).slice(-8).map(m=>({name:m.sender.name,text:m.text})),
+      reference:this.svc.state.messages.find(m=>m.roomId===goal.roomId&&m.id===(goal.replyTo??goal.threadId))?.text} : {}),
+      work: assignment.work, originalRequirement: goal.text,
+      ...(goal.routeDecision?.sequentialMembers ? {hostScheduled: true} : {}),
+      ...(goal.routeDecision?.sequentialMembers && goal.attachments?.length ? {attachments: goal.attachments} : {}),
       continuation: request?.text, previousReply: prior?.reply?.text,
       dependencyReplies: dependencies.map(item => ({
         name: shortName(this.svc.getBot(item.botId)), text: item.reply.text, messageId: item.reply.id
@@ -232,7 +243,15 @@ export class TeamMemberAssignments {
     const reply = this.reply(record);
     const base = { botId: assignment.botId, ...dispatch ? { dispatchId: dispatch.dispatchId } : {} };
     const state = (status, label, detail, action) => ({ ...base, status, label, detail, action });
-    if (reply) return { ...state("replied", "已回复"), replyId: reply.id };
+    if (reply) {
+      if (assignment.singleFile) {
+        const done = Object.values(this.team.reminders?.data?.events ?? {}).some(event =>
+          event.kind === "done" && event.effective && event.roomId === message.roomId &&
+          event.messageId === message.id && event.files.some(file => file.runId === dispatch.runId));
+        if (!done) return {...state("waiting-file","已回复，文件待交付","可回复原消息并点名继续"),replyId:reply.id};
+      }
+      return { ...state("replied", "已回复"), replyId: reply.id };
+    }
     if (!this.team.currentMembers(message.roomId).includes(assignment.botId)) return state("stopped", "成员不可用", "请核对当前群成员");
     if (record?.state.stop || this.closed(message.roomId, message.taskRef)) {
       return state("stopped", dispatch?.turn ? "已开工 · 已停止" : "已停止");
@@ -341,7 +360,12 @@ export class TeamMemberAssignments {
         throw Error("请点名原成员继续他自己的分工。");
       }
       const previous = this.current(latest);
-      if (this.reply(latest)) throw Error("这位成员已回复。请直接发送新的要求。");
+      if (this.reply(latest)) {
+        if (!assignment.singleFile) throw Error("这位成员已回复。请直接发送新的要求。");
+        const files = await team.reminders.assignmentFiles([latest]);
+        if (!files) throw Error("本单已有文件记录，但原件未通过校验，请先核对原件。");
+        if (files.length) throw Error("这位成员已交付文件，请从原消息打开。");
+      }
       if (this.absence(latest, previous)) throw Error("宿主确认未接到，请使用原消息下的重发。");
       if (state.status === "stopping" || previous && previous.status !== "revoked" && !previous.terminal) {
         throw Error("原派单尚未确认结束，请先核对原回合。");

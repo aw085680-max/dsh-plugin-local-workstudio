@@ -202,7 +202,8 @@ var LocalAgentAdapter = class extends LlmAdapter {
 		return (await driver.listModels()).map((model) => ({
 			provider,
 			id: model.id,
-			name: model.name
+			name: model.name,
+			...(model.reasoning?{reasoning:model.reasoning}:{})
 		}));
 	}
 	async resolveModel(provider, model) {
@@ -393,7 +394,7 @@ var LocalAgentAdapter = class extends LlmAdapter {
 				sessionId,
 				dispatchId,
 				prompt,
-				cwd: this.deps.cwdFor(sessionId),
+				cwd: await this.deps.taskCwdFor?.(sessionId) ?? this.deps.cwdFor(sessionId),
 				model: effectiveRecord?.modelOverride ?? options.model,
 				permission: this.deps.permissionFor(sessionId),
 				resumeId: modelChanged ? void 0 : effectiveRecord?.resumeId,

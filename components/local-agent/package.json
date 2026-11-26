@@ -1,7 +1,7 @@
 {
   "name": "@local-workstudio/local-agent",
   "description": "Local agent discovery — find installed agent CLIs and expose them as DSH model routes",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "main": "lib/index.js",

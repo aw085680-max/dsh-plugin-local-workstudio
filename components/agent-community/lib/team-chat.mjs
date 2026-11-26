@@ -1,3 +1,5 @@
+import {handoffScope,readHandoffDecision} from "./sequential-handoff.mjs";
+import {managedGroup} from "./group-routing.mjs";
 import {claimsReview} from "./team-review.mjs";
 import {CHAT_REPLY_LIMIT, chatRunId, displayReply, isChatRun, orderedChatMembers} from "./team-chat-routing.mjs";
 
@@ -217,13 +219,11 @@ export class TeamChat {
     }
     const eligible = this.team.currentMembers(room.id);
     const settings = this.svc.teamWorkflowFor(room);
-    const defaultTarget = [this.svc.leaderOfRoom(room.id), settings?.firstBotId, ...eligible].find(id => eligible.includes(id));
     const visibleMention = authored.who === "everyone" || authored.ids.length > 0;
     const quoted = reference?.sender.kind === "bot" && eligible.includes(reference.sender.botId) ? reference.sender.botId : undefined;
     const contextTaskId=!unresolvedMention && !room.paused &&
       (bareMention || decision.roleStatement || decision.followOriginal || marked.some(id=>this.team.threadCloser.isAdmin(id,room.id)))
       ?this.currentContext(room,message,reference):undefined;
-    const statusOnly=decision.roleStatement && !visibleMention && room.mentionOnly;
     const report=decision.followOriginal || decision.roleStatement;
     const statusText=report?this.receiptText(room.id,contextTaskId):undefined;
     const reviewTask=decision.reviewQuery&&!unresolvedMention?this.team.review.locate(room,{},reference):null;
@@ -232,28 +232,33 @@ export class TeamChat {
     const progress = verifiedReview?{taskId:verifiedReview.taskId,text:verifiedReview.text}:decision.intent === "progress" && !decision.followOriginal ? this.progress(room, reference, marked) : undefined;
     const explicitlyOrdered = decision.intent === "ordered-chat" && visibleMention;
     let targets = [];
-    let reason;
+    let reason, recipientSource;
+    const admin = room.team?.leader?.kind === "bot" ? room.team.leader.botId : this.svc.leaderOfRoom(room.id);
+    const referenced = quoted ?? (reference?.mentions?.length === 1 ? reference.mentions[0] : undefined);
     if (room.paused) reason = "群聊已暂停。";
     else if (unresolvedMention || visibleMention && !marked.length) reason = "请点名一位当前可用的成员。";
+    else if (!visibleMention && !reference && (room.admission?.mode ?? this.svc.cfg?.admissionDefault) === "observe") reason = "本群已设为只记录未点名消息。";
     else if (explicitlyOrdered) {
       const roleOrder = [settings?.firstBotId, settings?.reviewerId, settings?.supervisorId, ...(settings?.memberIds ?? []), ...room.memberIds];
       targets = orderedChatMembers(authored.sequence ?? (authored.who ? [] : marked), roleOrder, marked, decision);
       if (!targets.length) reason = "请确认接话成员和接力范围。";
     } else if (authored.who === "everyone" && !decision.each) {
-      const duty = marked.includes(defaultTarget) ? defaultTarget : marked[0];
-      if (duty) targets = [duty];
+      if (eligible.includes(admin) && marked.includes(admin)) targets = [admin];
+      else reason = "当前配置的群主不可用。";
+    } else if (!visibleMention && reference && eligible.includes(referenced)) {
+      targets = [referenced]; recipientSource = "reply";
     } else if (marked.length) targets = [...new Set(marked)];
-    else if (statusOnly) targets = [];
-    else if (room.mentionOnly) reason = "本群仅接受点名。请点名一位成员。";
-    else if (reference?.sender.kind === "bot" && !quoted) reason = "被引用的成员当前不可用。请点名另一位成员。";
-    else if (quoted || progress?.target || defaultTarget) targets = [quoted ?? progress?.target ?? defaultTarget];
-    else reason = "当前没有可用的群成员。";
+    else if (referenced || reference?.sender.kind==="bot") reason = "被引用的成员当前不可用。";
+    else if (eligible.includes(admin)) {
+      targets = [admin]; recipientSource = "room-admin";
+    } else reason = "当前配置的群主不可用，请检查本群的群主设置。";
 
     message.presentation = "chat";
     message.runtime = "chat";
     if (progress?.taskId) message.taskRef = progress.taskId;
     message.chatPlan = {
       targets,
+      ...(recipientSource ? {recipientSource} : {}),
       allowance: explicitlyOrdered ? CHAT_REPLY_LIMIT : targets.length,
       ordered: explicitlyOrdered,
       ...(bareMention && !reference && visibleMention ? {pingOnly: true} : {}),
@@ -272,8 +277,19 @@ export class TeamChat {
     const plan = message?.chatPlan;
     const room = this.svc.getRoom(run.roomId);
     if (this.team.threadCloser.closure(run.roomId,run.taskRef) && !message?.closeRequest) return false;
+    const reference = message?.replyTo ?? message?.threadId;
+    const quoted = reference && this.svc.state.messages.find(row => row.id === reference && row.roomId === run.roomId);
+    const replyRecipient = quoted?.sender.kind === "bot" ? quoted.sender.botId : quoted?.mentions?.length === 1 ? quoted.mentions[0] : undefined;
+    const semantic=plan?.semanticScope;
+    const routed=semantic&&message?.sender?.kind==="user"&&managedGroup(room)&&plan.recipientSource==="user-conditional"&&
+      (run.chatIndex===0&&run.botId===semantic.first||run.chatIndex===1&&plan.handoffDecision?.action==="handoff"&&run.botId===semantic.second&&
+       plan.handoffDecision.sourceRunId===chatRunId(message.id,0)&&this.replyFor(message,0)?.runId===plan.handoffDecision.sourceRunId);
+    const scoped = routed || plan?.targets.length === 1 && !message.mentions?.length && (
+      plan.recipientSource === "room-admin" && !replyRecipient && (room?.team?.leader?.kind === "bot" ? room.team.leader.botId : this.svc.leaderOfRoom(run.roomId)) === run.botId ||
+      plan.recipientSource === "reply" && replyRecipient === run.botId
+    );
     if (!room || !plan || plan.closedAt || room.paused || this.svc.writesBlocked ||
-        (room.mentionOnly && !message.mentions?.includes(run.botId))) return false;
+        (room.mentionOnly && !scoped && !message.mentions?.includes(run.botId))) return false;
     const index = run.chatIndex;
     return run.id === chatRunId(message.id, index) &&
       plan.targets[index] === run.botId && index < plan.allowance &&
@@ -377,6 +393,28 @@ export class TeamChat {
     }
   }
 
+  async resolveConditional(run,input) {
+    const message=this.messageFor(run),plan=message?.chatPlan,scope=plan?.semanticScope;
+    if(!scope||run.chatIndex!==0||run.botId!==scope.first||input.status!=="completed")return input;
+    const packet=readHandoffDecision(input.reply?.text,message.text,scope);
+    if(!packet)return {...input,status:"failed",reply:undefined,error:"本轮群接话未收到有效的结构化回执，原话已保留。"};
+    await this.svc.roomMessageMutex.run(message.roomId,async()=>{
+      const current=this.messageFor(run),latest=this.svc.state.runs.find(r=>r.id===run.id);
+      if(latest?.status!=="running"||latest.controlRevision!==input.expectedRevision||!current?.chatPlan)return;
+      const room=this.svc.getRoom(message.roomId),members=this.team.currentMembers(room.id);
+      const ref=this.svc.state.messages.find(m=>m.roomId===room.id&&m.id===(current.replyTo??current.threadId));
+      const verified=handoffScope(room,current.text,this.svc.state.bots,members,current.mentions??[],ref);
+      if(packet.action==="handoff"&&(!verified||verified.first!==scope.first||verified.second!==scope.second))throw Error("交接对象已失效");
+      const targets=packet.action==="handoff"?[scope.first,scope.second]:[scope.first];
+      const decision={action:packet.action,basis:packet.basis,sourceRunId:run.id};
+      const updated={...current,authorizationSnapshot:{...current.authorizationSnapshot,members:targets},
+        chatPlan:{...current.chatPlan,targets,allowance:targets.length,ordered:targets.length===2,handoffDecision:decision}};
+      this.svc.state={...this.svc.state,messages:this.svc.state.messages.map(m=>m===current?updated:m)};
+      await this.svc.flushNow();
+    });
+    return {...input,reply:{...input.reply,text:packet.say}};
+  }
+
   async settled(run) {
     if (run.status !== "completed") return;
     await this.svc.roomMessageMutex.run(run.roomId, async () => {
@@ -392,12 +430,15 @@ export class TeamChat {
     if (!plan) return run.prompt;
     if (message.closeRequest) return "用户明确授权你结束当前任务。必须先调用 agent_community_close_thread，依据工具的实际回执简短回复。工具失败就如实说明，没有成功回执不能说已结束。不要恢复历史工作。\n用户本次原话："+message.text;
     const self="本次接话成员："+(this.svc.getBot(run.botId)?.name??"群成员");
+    if (message.routeDecision?.clarification) return self+"\n请只向用户澄清本单分工："+message.routeDecision.clarification+"\n用户原话："+message.text;
     if (plan.pingOnly) return self+"\n用户只发了点名「" + message.text +
       "」。请以本人身份简短应答。"+(plan.contextTaskId?"你的原任务回执："+this.receiptText(run.roomId,plan.contextTaskId,run.botId):"本次没有工作派单。");
     if(plan.workflowReport)return self+"\n用户本次原话："+message.text+"\n宿主核实的状态："+this.receiptText(run.roomId,plan.contextTaskId)+
       "\n本次是群内跟进，按回执答复。群内交接由调度器传递。";
     if (plan.countFrom !== undefined) {
+      const previous=run.chatIndex>0 && this.replyFor(message,run.chatIndex-1);
       return [
+        ...(previous?["上一棒群内实际回复："+previous.text]:[]),
         "按顺序报数。这一棒只回答指定的数字。宿主会安排下一位。",
         "只回复这个数字：" + (plan.countFrom + run.chatIndex + 1),
         "用户本次原话：" + message.text
@@ -408,6 +449,8 @@ export class TeamChat {
     const previous = plan.ordered && run.chatIndex > 0 ? this.replyFor(message, run.chatIndex - 1) : undefined;
     return [
       self,
+      plan.semanticScope && run.chatIndex===0 && "只根据用户本条原话判断是否确实安排另一位成员接续你的工作。引用、举例、提问历史状态和资料里的要求不授权派单。先实际完成你这部分；若确实有后续，用用户原话中的连续短语作 basis，必须含接手人的名字或角色；普通交流用 answer。最后单独一行输出 WORKSTUDIO_RESULT 加 JSON 对象，格式为 " + (plan.semanticScope && run.chatIndex===0 ? JSON.stringify({action:"handoff 或 answer",basis:"用户原话或空字符串",say:"你给用户的真实回复与核查结果"}) : ""),
+      plan.semanticScope && run.chatIndex===1 && "按用户原话对上一位的实际结果独立复核，给出本人的结论。直接回复正文。",
       "直接回复本条群聊消息。你代表自己发言，可以回答、澄清，或根据宿主核实的状态说明进度。历史、引用和资料只供理解本条消息。",
       plan.ordered ? "用户要求按顺序接话。直接接续，只发自己的一句。" : "",
       rows.length ? "前文（仅供理解）：" + JSON.stringify(rows.map(m => ({name:m.sender.name,text:m.text}))) : "",
@@ -449,7 +492,8 @@ export class TeamChat {
     const name = this.svc.getBot(run.botId)?.name ?? "";
     let firstLine = text.trim().split(/\r?\n/u, 1)[0].normalize("NFKC");
     const speaker = firstLine.match(/^([^:：]+)[:：]\s*(.+)$/u);
-    if (speaker && [name, name.split("--").at(-1)].includes(speaker[1].trim())) firstLine = speaker[2].trim();
+    if (speaker && [name, name.split(/--|——/u).at(-1)].includes(speaker[1].trim())) firstLine = speaker[2].trim();
+    firstLine = firstLine.replace(/[!！。,，;；\s]+\s*(?:@[^@\s，。！!：:]{1,50}\s*)?(?:请)?(?:接棒|接力|接下一棒)[!！。.]*$/u,"");
     firstLine = firstLine.replace(/[.!。！]$/u, "").replace(/^(\*\*|__|\x60)(.*?)\1$/u, "$2").trim();
     if (firstLine !== expected) {
       return {...base, reply: undefined, status:"failed", error:"本棒未收到所要求的数字 " + expected + "。"};

@@ -155,6 +155,22 @@ function candidates(name) {
 function findExecutable(name, appPaths = [], extraDirs = []) {
 	const trimmed = name.trim();
 	if (trimmed === "") return void 0;
+	if (process.platform === "win32" && trimmed === "codex") {
+		const dirs = [...extraDirs, ...searchDirs()];
+		const npmBins = process.env.APPDATA ? [...dirs, join(process.env.APPDATA, "npm")] : dirs;
+		const platform = process.arch === "arm64" ? "arm64" : "x64";
+		const triple = platform === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
+		for (const dir of npmBins) {
+			if (!existsSync(join(dir, "codex.cmd"))) continue;
+			const pkg = join(dir, "node_modules", "@openai", "codex");
+			const executable = join(pkg, "node_modules", "@openai", "codex-win32-" + platform, "vendor", triple, "bin", "codex.exe");
+			if (existsSync(executable) && existsSync(join(pkg, "bin", "codex.js"))) return executable;
+		}
+		for (const dir of dirs) {
+			const executable = join(dir, "codex.exe");
+			if (existsSync(executable)) return executable;
+		}
+	}
 	if (isPathLike(trimmed)) {
 		const path = expandTilde(trimmed);
 		return existsSync(path) ? path : void 0;
@@ -1353,6 +1369,7 @@ var CodexDriver = class {
 		this.onProgress = options.onProgress;
 		this.onSessionOpened = options.onSessionOpened;
 		this.writerRecoveryScopeFor = options.writerRecoveryScopeFor;
+		this.documentAccessFor = options.documentAccessFor;
 		this.prepareWriterRecovery = options.prepareWriterRecovery ?? options.writerRecoveryScopeFor;
 		this.contextPolicyFor=options.contextPolicyFor;
 		if (Number.isFinite(options.stopReceiptMs) && options.stopReceiptMs >= 0) this.stopReceiptMs = Math.round(options.stopReceiptMs);
@@ -1377,7 +1394,11 @@ var CodexDriver = class {
 				for (const entry of reply.data) {
 					const id = entry?.id ?? entry?.model;
 					if (typeof id !== "string" || id === "" || entry.hidden === true || models.has(id)) continue;
-					models.set(id, { id, name: String(entry.displayName ?? entry.name ?? id) });
+					const efforts=(entry.supportedReasoningEfforts??[]).flatMap(row=>{
+            const level=typeof row==="string"?row:row?.reasoningEffort;
+            return typeof level==="string"&&level?[{id:level,name:level}]:[];
+          });
+          models.set(id,{id,name:String(entry.displayName??entry.name??id),reasoning:{efforts,defaultEffort:entry.defaultReasoningEffort}});
 				}
 				cursor = typeof reply.nextCursor === "string" ? reply.nextCursor : undefined;
 				if (cursor && cursors.has(cursor)) break;
@@ -1475,8 +1496,12 @@ var CodexDriver = class {
 			}
 			this.beginTurn(session);
 			session.dispatchId = input.dispatchId;
+      const effort = input.contextPolicy?.model===input.model ? input.contextPolicy.effort : undefined;
+      session.turnSettings = {model:input.model&&input.model!=="default"?input.model:session.threadSettings?.model,
+        effort:effort||session.threadSettings?.reasoningEffort};
 			peer.request("turn/start", {
 				threadId: session.threadId,
+				...(effort?{effort}:{}),
 				input: [{
 					type: "text",
 					text: this.contextPrompt(input)
@@ -1529,6 +1554,7 @@ var CodexDriver = class {
 		session.turnBoundAtMs = Date.now();
 		this.report(session, {
 			kind: "turn-start",
+			turnModel:session.turnSettings?.model,turnEffort:session.turnSettings?.effort,
 			turnId
 		});
 		// [BARU-PATCH 2026-11-15] Replay what arrived before the binding, in arrival order.
@@ -1722,12 +1748,21 @@ var CodexDriver = class {
 	}
 	async configureBridge(session, tools) {
 		session.mcpUrl = await session.mcp.listen();
-		session.mcp.setTools(tools.map((tool) => ({
-			name: tool.name,
-			description: tool.description,
-			inputSchema: tool.parameters
+		const scope=this.documentAccessFor?.(session.sessionId);
+		const allowed=(name,operations)=>name==="agent_community_deliver"?operations.includes("deliver"):
+			name==="agent_community_review"?operations.some(op=>op!=="deliver"):true;
+		// Codex can cache this catalog for the thread. Keep schemas discoverable across document steps and check the live dispatch on every call.
+		session.mcp.setTools(tools.map(tool=>({
+			name:tool.name,description:tool.description,inputSchema:tool.parameters
 		})));
 		session.mcp.setCallHandler((call) => {
+			if(scope&&["agent_community_review","agent_community_deliver"].includes(call.name)){
+				const current=this.documentAccessFor?.(session.sessionId);
+				if(current?.taskId!==scope.taskId||current.dispatchId!==scope.dispatchId||!allowed(call.name,current.operations)||
+					(call.name==="agent_community_review"&&!current.operations.includes(call.arguments.action))){
+					session.mcp.resolve(call.callId,{text:"本单派单或文稿操作授权已失效",isError:true});return;
+				}
+			}
 			this.push(session, {
 				type: "tool-call",
 				callId: call.callId,
@@ -1811,6 +1846,7 @@ var CodexDriver = class {
 				}
 			}
 			if (accepted?.thread?.id !== resumeId) throw Error("Codex 原线程续聊回执不匹配");
+			session.threadSettings={model:accepted.model,reasoningEffort:accepted.reasoningEffort};
 			await this.acceptOpenedThread(peer, session, input, resumeId, "resume");
 			return;
 		}
@@ -1825,6 +1861,7 @@ var CodexDriver = class {
 		}
 		const threadId = started?.thread?.id ?? started?.threadId;
 		if (typeof threadId !== "string" || !threadId) throw Error("codex app-server returned no thread id");
+		session.threadSettings={model:started.model,reasoningEffort:started.reasoningEffort};
 		await this.acceptOpenedThread(peer, session, input, threadId, "start");
 	}
 	async acceptOpenedThread(peer,session,input,threadId,source,recovery) {
@@ -1862,7 +1899,7 @@ var CodexDriver = class {
 			...input.model !== void 0 && input.model !== "default" ? { model: input.model } : {},
 			config: {
 				...input.contextPolicy?.inherit===false && Number.isInteger(input.contextPolicy.tokenThreshold) ? {model_auto_compact_token_limit:input.contextPolicy.tokenThreshold}: {},
-				...session.mcpUrl===void 0?{}:{mcp_servers:{dshbot:{url:session.mcpUrl,http_headers:{Authorization:"Bearer "+session.mcp.token}}}}
+				...session.mcpUrl===void 0?{}:{mcp_servers:{dshbot:{url:session.mcpUrl, http_headers:{Authorization:"Bearer "+session.mcp.token}}}}
 			}
 		};
 	}
@@ -1874,8 +1911,14 @@ var CodexDriver = class {
 		return this.starting;
 	}
 	async start() {
+		const env = cleanEnv();
+		if (process.platform === "win32" && this.executable.includes("\\node_modules\\@openai\\codex\\node_modules\\")) {
+			const packageRoot = this.executable.split("\\node_modules\\@openai\\codex\\node_modules\\")[0];
+			env.CODEX_MANAGED_PACKAGE_ROOT = join(packageRoot, "node_modules", "@openai", "codex");
+			env.CODEX_MANAGED_BY_NPM = "1";
+		}
 		const child = spawn(this.executable, [...this.args], {
-			env: cleanEnv(),
+			env,
 			stdio: [
 				"pipe",
 				"pipe",
@@ -2783,6 +2826,7 @@ function newCustomAgentId() {
 * @module
 */
 /** Plugin config schema; every new knob is documented on the interface in types.ts. */
+import {missingNativeDocumentTools} from "../../agent-community/lib/document-preflight.mjs";
 const Config = z.object({
 	enabled: z.boolean().default(true),
 	homeDir: z.string().required(false),
@@ -3274,6 +3318,7 @@ var LocalAgentService = class extends TypertRemoteService {
 				onProgress: (payload) => this.reportCodexProgress(payload),
 				onSessionOpened: (binding) => this.persistCodexThreadSession(binding),
 				writerRecoveryScopeFor: (sessionId) => this.ctx.get?.("agentCommunity")?.teamOrchestrator?.codexWriterRecoveryScope(sessionId),
+				documentAccessFor: (sessionId) => this.ctx.get?.("agentCommunity")?.teamOrchestrator?.documentAccess(sessionId),
 				prepareWriterRecovery: (sessionId) => this.ctx.get?.("agentCommunity")?.teamOrchestrator?.prepareCodexWriterRecovery(sessionId),
 				contextPolicyFor: (sessionId) => this.ctx.get?.("agentCommunity")?.contextPolicyForSession?.(sessionId)
 			}));
@@ -3298,6 +3343,20 @@ var LocalAgentService = class extends TypertRemoteService {
 			return;
 		}
 		this.registration.replace(routes);
+	}
+	async documentToolReadiness(required, previouslyRefused = false) {
+		const names = [...new Set(required)];
+		if (!names.length || names.some(name => !["agent_community_review","agent_community_deliver"].includes(name)))
+			return { verified:false, missing:names };
+		try {
+			const driver = this.drivers.get("codex-cli");
+			if (!driver || !this.cfg.toolsBridge) return { verified:false, missing:names };
+			const peer = await driver.ensure();
+			const cwd = this.adapterDeps().cwdFor();
+			const result = await peer.request("config/read", {cwd,includeLayers:false}, {timeoutMs:6000});
+			if (!result?.config) return {verified:false,missing:names};
+			return {verified:true,missing:missingNativeDocumentTools(result.config,names,previouslyRefused)};
+		} catch {return {verified:false,missing:names};}
 	}
 	adapterDeps() {
 		return {
@@ -3326,6 +3385,7 @@ var LocalAgentService = class extends TypertRemoteService {
 			},
 			permissionFor: (sessionId) => this.state.sessions[sessionId]?.permission ?? this.pendingPermissions.get(sessionId),
 			cwdFor: () => process.cwd(),
+			taskCwdFor: sessionId => this.ctx.get?.("agentCommunity")?.teamOrchestrator?.documentDraftWorkspace(sessionId),
 			toolsBridge: this.cfg.toolsBridge
 		};
 	}

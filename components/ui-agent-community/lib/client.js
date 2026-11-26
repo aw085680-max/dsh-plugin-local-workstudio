@@ -386,6 +386,300 @@ const CSS$2 = `
 .dsh-plugin-community-avatar-choice[data-active=true]{border-color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dsh-plugin-community-pick{flex:none;white-space:nowrap}
 
+
+/* Shared appearance for the room list, conversation and composer. */
+.dsh-plugin-community-page {
+  --ws-canvas: light-dark(#f1f5f0, #161e19);
+  --ws-sidebar: light-dark(#f8faf7, #1b241e);
+  --ws-surface: light-dark(#ffffff, #222d26);
+  --ws-ink: light-dark(#182c22, #ebf4ed);
+  --ws-muted: light-dark(#53665b, #b0c2b6);
+  --ws-line: light-dark(#dbe5dc, #394a3f);
+  --ws-soft: light-dark(#e9efe8, #29372e);
+  --ws-hover: light-dark(#edf3ed, #2a392f);
+  --ws-selected: light-dark(#e2efe5, #314a39);
+  --ws-accent: light-dark(#22624a, #acdcbc);
+  --ws-accent-hover: light-dark(#184e39, #bde7cb);
+  --ws-on-accent: light-dark(#ffffff, #172a1e);
+  --ws-shadow: 0 3px 12px light-dark(#24452a13, #00000030);
+  color: var(--ws-ink);
+  background: var(--ws-canvas);
+}
+
+.dsh-plugin-community-sidebar {
+  gap: 20px;
+  padding: 22px 13px 16px;
+  border-color: var(--ws-line);
+  background: var(--ws-sidebar);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ws-line) transparent;
+}
+.dsh-plugin-community-section { gap: 8px; min-width: 0; }
+.dsh-plugin-community-section-heading { align-items: center; padding: 0 3px 0 9px; }
+.dsh-plugin-community-section-title { color: var(--ws-muted); }
+.dsh-plugin-community-tabs {
+  box-sizing: border-box;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 11px;
+  background: var(--ws-soft);
+}
+.dsh-plugin-community-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--ws-muted);
+  white-space: nowrap;
+}
+.dsh-plugin-community-tab:hover { background: var(--ws-hover); color: var(--ws-ink); }
+.dsh-plugin-community-tab[data-active=true] {
+  color: var(--ws-accent);
+  background: var(--ws-surface);
+  box-shadow: 0 1px 3px light-dark(#24452a1a, #00000028);
+  font-weight: 650;
+}
+.dsh-plugin-community-add-button {
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+  background: var(--ws-surface);
+  color: var(--ws-accent);
+}
+.dsh-plugin-community-add-button:hover { color: var(--ws-accent); background: var(--ws-selected); }
+.dsh-plugin-community-item-list { gap: 4px; }
+:is(.dsh-plugin-community-bot-row, .dsh-plugin-community-room-row) {
+  min-height: 50px;
+  padding-inline: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--ws-ink);
+}
+.dsh-plugin-community-row-with-action:is(:hover, :focus-within)
+  > :is(.dsh-plugin-community-bot-row, .dsh-plugin-community-room-row) { padding-inline-end: 64px; }
+:is(.dsh-plugin-community-bot-row, .dsh-plugin-community-room-row):hover {
+  color: var(--ws-ink);
+  background: var(--ws-hover);
+}
+:is(.dsh-plugin-community-bot-row, .dsh-plugin-community-room-row)[data-active=true] {
+  color: var(--ws-accent);
+  background: var(--ws-selected);
+  border-color: var(--ws-line);
+  font-weight: 650;
+}
+.dsh-plugin-community-avatar { border-color: var(--ws-line); border-radius: 9px; background: var(--ws-surface); }
+.dsh-plugin-community-row-meta,
+.dsh-plugin-community-list-empty { color: var(--ws-muted); }
+.dsh-plugin-community-row-action-button,
+.dsh-plugin-community-row-delete-button { border-radius: 7px; color: var(--ws-muted); }
+
+.dsh-plugin-community-content,
+.dsh-plugin-community-empty-state { background: var(--ws-canvas); }
+.dsh-plugin-community-empty-title { color: var(--ws-ink); font-weight: 650; }
+.dsh-plugin-community-empty-hint { color: var(--ws-muted); }
+.dsh-plugin-community-page .ac-list-toggle {
+  border-color: var(--ws-line);
+  border-radius: 8px;
+  color: var(--ws-muted);
+  background: var(--ws-surface);
+}
+.dsh-plugin-community-page .ac-list-toggle:hover { color: var(--ws-accent); background: var(--ws-selected); }
+.dsh-plugin-community-page :is(.dsh-plugin-community-sidebar button, .ac-list-toggle):focus-visible {
+  outline: 2px solid var(--ws-accent);
+  outline-offset: -2px;
+}
+.dsh-plugin-community-page .ac-composer-card {
+  border: 1px solid var(--ws-line);
+  border-radius: 16px;
+  background: var(--ws-surface);
+  box-shadow: var(--ws-shadow);
+}
+.dsh-plugin-community-page .ac-composer-card:focus-within {
+  border-color: var(--ws-accent);
+}
+.dsh-plugin-community-page .ac-composer-card .ac-composer-input::placeholder { color: var(--ws-muted); }
+
+.dsh-plugin-community-page .ac-group-chat {
+  --paper: var(--ws-surface);
+  --chat: var(--ws-canvas);
+  --ink: var(--ws-ink);
+  --muted: var(--ws-muted);
+  --line: var(--ws-line);
+  --quiet: var(--ws-soft);
+  --green: var(--ws-accent);
+  --on-green: var(--ws-on-accent);
+  --bubble-gap: 23px;
+  --ws-chat-gutter: clamp(12px, 3cqi, 30px);
+  --ws-transcript-width: 1060px;
+  container-type: inline-size;
+  border: 0;
+  border-radius: 0;
+}
+.dsh-plugin-community-page .ac-group-chat .br-top {
+  gap: 11px;
+  min-height: 66px;
+  padding: 12px var(--ws-chat-gutter);
+}
+.dsh-plugin-community-page .ac-group-chat .br-heading { flex: 1 1 auto; }
+.dsh-plugin-community-page .ac-group-chat .br-heading :is(h1, .br-roster) {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dsh-plugin-community-page .ac-group-chat .br-heading h1 { font-size: 20px; font-weight: 680; }
+.dsh-plugin-community-page .ac-group-chat .br-roster { margin-top: 3px; }
+.dsh-plugin-community-page .ac-group-chat .br-group-avatar {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--ws-line);
+  border-radius: 11px;
+  background: var(--ws-surface);
+}
+.dsh-plugin-community-page .ac-group-chat .br-list-toggle {
+  height: 34px;
+  width: 34px;
+  flex: none;
+  border-radius: 8px;
+}
+.dsh-plugin-community-page .ac-group-chat .br-list-toggle:hover { color: var(--ws-accent); background: var(--ws-hover); }
+.dsh-plugin-community-page .ac-group-chat .br-reminder-menu > .br-button {
+  min-height: 34px;
+  padding: 4px 11px;
+  border: 1px solid var(--ws-line);
+  border-radius: 9px;
+  color: var(--ws-accent);
+  background: var(--ws-hover);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dsh-plugin-community-page .ac-group-chat .br-reminder-menu > .br-button:hover {
+  background: var(--ws-selected);
+  text-decoration: none;
+}
+.dsh-plugin-community-page .ac-group-chat .br-reminder-menu > .br-button[aria-expanded=true] {
+  border-color: var(--ws-accent);
+  color: var(--ws-on-accent);
+  background: var(--ws-accent);
+}
+.dsh-plugin-community-page .ac-group-chat .br-reminder-feed {
+  width: min(340px, calc(100cqi - 2 * var(--ws-chat-gutter)));
+  max-height: min(55vh, 60cqh);
+  margin-top: 6px;
+  border-radius: 13px;
+  box-shadow: 0 10px 30px light-dark(#24452a23, #00000055);
+}
+.dsh-plugin-community-page .ac-group-chat .br-history {
+  padding: 22px var(--ws-chat-gutter);
+  background: linear-gradient(170deg, var(--ws-sidebar) 0%, var(--ws-canvas) 55%);
+}
+.dsh-plugin-community-page .ac-group-chat .br-log {
+  max-inline-size: var(--ws-transcript-width);
+  margin-inline: auto;
+}
+.dsh-plugin-community-page .ac-group-chat .br-avatar {
+  flex-basis: 36px;
+  height: 36px;
+  border: 1px solid var(--ws-line);
+  border-radius: 11px;
+}
+.dsh-plugin-community-page .ac-group-chat .br-msg { gap: 5px; }
+.dsh-plugin-community-page .ac-group-chat .br-by span { color: var(--ws-ink); font-weight: 650; }
+.dsh-plugin-community-page .ac-group-chat [data-actor=me] { --bubble: light-dark(#dceee0, #2b4736); }
+.dsh-plugin-community-page .ac-group-chat [data-actor=yun] { --bubble: light-dark(#eaf3f8, #273b46); }
+.dsh-plugin-community-page .ac-group-chat [data-actor=ba] { --bubble: light-dark(#f1edf7, #3a3243); }
+.dsh-plugin-community-page .ac-group-chat [data-actor=di] { --bubble: light-dark(#f7f0e2, #3d3529); }
+.dsh-plugin-community-page .ac-group-chat .br-bubble {
+  padding: 9px 13px;
+  border: 1px solid color-mix(in srgb, var(--bubble) 42%, var(--ws-line));
+  border-radius: 14px;
+  border-start-start-radius: 5px;
+}
+.dsh-plugin-community-page .ac-group-chat [data-actor=me] .br-bubble {
+  border-start-start-radius: 14px;
+  border-start-end-radius: 5px;
+}
+.dsh-plugin-community-page .ac-group-chat .br-bubble::before { content: none; }
+
+.dsh-plugin-community-page .ac-group-chat .br-compose {
+  padding: 13px var(--ws-chat-gutter) 14px;
+  background: var(--ws-sidebar);
+}
+.dsh-plugin-community-page .ac-group-chat .br-compose > .ac-composer-resize {
+  max-inline-size: var(--ws-transcript-width);
+  margin: -13px auto 1px;
+}
+.dsh-plugin-community-page .ac-group-chat :is(.br-inputbox, .br-mentions, .br-reply-quote) {
+  max-inline-size: var(--ws-transcript-width);
+  margin-inline: auto;
+}
+.dsh-plugin-community-page .ac-group-chat .br-inputbox {
+  gap: 7px;
+  padding: 6px 8px;
+  border: 1px solid light-dark(#a9b9ad, #687e6f);
+  border-radius: 15px;
+  background: var(--ws-surface);
+  box-shadow: var(--ws-shadow);
+}
+.dsh-plugin-community-page .ac-group-chat .br-inputbox:focus-within {
+  border-color: var(--ws-accent);
+  box-shadow: 0 0 0 1px var(--ws-accent);
+}
+.dsh-plugin-community-page .ac-group-chat .br-inputbox textarea { caret-color: var(--ws-accent); }
+.dsh-plugin-community-page .ac-group-chat .br-at {
+  flex: none;
+  width: 36px;
+  border-radius: 9px;
+  background: var(--ws-soft);
+  color: var(--ws-accent);
+}
+.dsh-plugin-community-page .ac-group-chat .br-at:is(:hover, [aria-expanded=true]) {
+  background: var(--ws-selected);
+  color: var(--ws-accent);
+}
+.dsh-plugin-community-page .ac-group-chat .br-send {
+  min-height: 36px;
+  padding-inline: 14px;
+  border-radius: 9px;
+}
+.dsh-plugin-community-page .ac-group-chat .br-send:hover:enabled { background: var(--ws-accent-hover); }
+.dsh-plugin-community-page .ac-group-chat .br-inputbox > .br-button {
+  flex: none;
+  min-height: 36px;
+  padding-inline: 9px;
+  border: 1px solid var(--ws-line);
+  border-radius: 9px;
+  color: var(--ws-accent);
+  white-space: nowrap;
+  font-size: 12px;
+}
+.dsh-plugin-community-page .ac-group-chat .br-inputbox > .br-button:hover:enabled {
+  background: var(--ws-selected);
+  text-decoration: none;
+}
+.dsh-plugin-community-page .ac-group-chat .br-mentions button { border-radius: 8px; }
+.dsh-plugin-community-page .ac-group-chat .br-reply-quote {
+  padding: 4px 9px;
+  border-inline-start: 2px solid var(--ws-accent);
+  border-radius: 5px;
+  background: var(--ws-soft);
+}
+
+@media (max-width: 760px) {
+  .dsh-plugin-community-sidebar { gap: 9px; padding: 10px 12px; }
+}
+@media (hover: none) {
+  .dsh-plugin-community-row-with-action > :is(.dsh-plugin-community-bot-row, .dsh-plugin-community-room-row) { padding-inline-end: 64px; }
+  .dsh-plugin-community-row-with-action > :is(.dsh-plugin-community-row-action-button, .dsh-plugin-community-row-delete-button) { opacity: 1; }
+}
+@container (max-width: 480px) {
+  .dsh-plugin-community-page .ac-group-chat .br-top { gap: 7px; min-height: 58px; padding-block: 9px; }
+  .dsh-plugin-community-page .ac-group-chat .br-heading h1 { font-size: 17px; }
+  .dsh-plugin-community-page .ac-group-chat .br-group-avatar { width: 33px; height: 33px; }
+  .dsh-plugin-community-page .ac-group-chat .br-history { padding-block: 16px; }
+  .dsh-plugin-community-page .ac-group-chat .br-msg { max-width: calc(100% - 46px); }
+  .dsh-plugin-community-page .ac-group-chat .br-inputbox { gap: 4px; padding-inline: 5px; }
+}
+
 `;
 if (typeof document !== "undefined" && document.querySelector(`style[data-plugin-css="${STYLE_ID$1}"]`) === null) {
 	const tag = document.createElement("style");
@@ -8237,15 +8531,11 @@ function describeError$2(error) {
 * Never throws: the panel shows the message instead of dropping the preview tab.
 */
 async function loadDeliverablePreview(remote, target) {
-	const { roomId, runId, index, file } = target;
+	const { file, ...address } = target;
 	const extension = extensionOf$2(file.name);
 	try {
 		if (HOST_CONVERTED_EXTENSIONS.has(extension)) {
-			const converted = await remote.renderDeliverableDocument({
-				roomId,
-				runId,
-				index
-			});
+			const converted = await remote.renderDeliverableDocument(address);
 			if (!converted.ok) return {
 				kind: "error",
 				message: converted.error
@@ -8257,11 +8547,7 @@ async function loadDeliverablePreview(remote, target) {
 				name: file.name
 			};
 		}
-		const value = await remote.readDeliverablePreview({
-			roomId,
-			runId,
-			index
-		});
+		const value = await remote.readDeliverablePreview(address);
 		if (value.kind === "missing") return {
 			kind: "missing",
 			name: file.name
@@ -60745,7 +61031,8 @@ function PreviewContent({ source, name }) {
 const PREVIEW_EVENT = "agent-community:preview";
 /** One preview surface, chosen by the file's type. */
 function PreviewDock({ requests, active, remote, onSelect, onCloseTab, onCloseAll }) {
-	const { file, roomId, runId, index } = requests[Math.min(Math.max(active, 0), requests.length - 1)];
+	const target = requests[Math.min(Math.max(active, 0), requests.length - 1)];
+	const { file, ...address } = target;
 	const [source, setSource] = useState({ kind: "loading" });
 	useEffect(() => {
 		let alive = true;
@@ -60757,34 +61044,23 @@ function PreviewDock({ requests, active, remote, onSelect, onCloseTab, onCloseAl
 			});
 			return;
 		}
-		loadDeliverablePreview(remote, {
-			roomId,
-			runId,
-			index,
-			file
-		}).then((next) => {
+		loadDeliverablePreview(remote, target).then((next) => {
 			if (alive) setSource(next);
 		});
 		return () => {
 			alive = false;
 		};
-	}, [
-		remote,
-		roomId,
-		runId,
-		index,
-		file
-	]);
-	const openNative = () => {
-		if (remote === void 0) return;
-		remote.deliverableFileAction({
-			roomId,
-			runId,
-			index,
-			action: "open"
-		}).catch(() => void 0);
-	};
-	return /* @__PURE__ */ jsxs("section", {
+	}, [remote,target]);
+    const [nativeError,setNativeError]=useState("");
+    useEffect(()=>setNativeError(""),[target]);
+    const openNative = async () => {
+      try {
+        const result=await remote.deliverableFileAction({...address,action:"open"});
+        if(!result?.ok)throw Error(result?.error||"宿主未能打开这个文件");
+        setNativeError("");
+      } catch(error){setNativeError(error.message??String(error));}
+    };
+    return /* @__PURE__ */ jsxs("section", {
 		"data-ac-preview-dock": "",
 		style: {
 			flex: "0 0 44%",
@@ -60796,7 +61072,7 @@ function PreviewDock({ requests, active, remote, onSelect, onCloseTab, onCloseAl
 			borderLeft: "1px solid var(--dsw-alias-border-secondary, #e4e7eb)",
 			background: "var(--dsw-alias-bg-elevated, #fff)"
 		},
-		children: [/* @__PURE__ */ jsxs("header", {
+		children: [nativeError&&jsx("div",{role:"alert",children:nativeError}),/* @__PURE__ */ jsxs("header", {
 			style: {
 				display: "flex",
 				alignItems: "center",
@@ -60845,7 +61121,7 @@ function PreviewDock({ requests, active, remote, onSelect, onCloseTab, onCloseAl
 						},
 						children: "×"
 					})]
-				}, `${item.roomId}:${item.runId}:${item.index}`)),
+				}, `${item.roomId}:${item.runId}:${item.fileId??item.index}`)),
 				/* @__PURE__ */ jsx("span", { style: { flex: 1 } }),
 				/* @__PURE__ */ jsx("button", {
 					type: "button",
@@ -63670,7 +63946,7 @@ function ComposerArea({ roomId, isGroup, bots, isRunning, pendingApproval, queue
    jsx("textarea",{ref:inputRef,value:text,onChange:handleChange,onKeyDown:handleKeyDown,onPaste:handlePaste,
     onCompositionStart:()=>{isComposing.current=true;},onCompositionEnd:()=>{isComposing.current=false;},
     placeholder:"发消息…","aria-label":"发消息",className:"ac-composer-input",rows:1}),
-   jsx("button",{type:"button",className:"br-send","aria-label":"发送消息",disabled:!hasContent,onClick:handleSend,children:"发送"})
+   jsx("button",{type:"button",className:"br-send","aria-label":"发送消息",disabled:!hasContent,onClick:()=>handleSend(),children:"发送"}),
   ]})
  ]});
 	return /* @__PURE__ */ jsxs("div", {
@@ -64620,7 +64896,7 @@ function BotConversationPanel({ listControl, room, onReload, roomId, roomName, i
 			const detail = event.detail;
 			if (detail === void 0 || typeof detail !== "object") return;
 			setPreviews((previous) => {
-				const found = previous.findIndex((item) => item.roomId === detail.roomId && item.runId === detail.runId && item.index === detail.index);
+				const found = previous.findIndex((item) => item.roomId === detail.roomId && item.runId === detail.runId && item.index === detail.index && item.fileId === detail.fileId && item.reminderKey === detail.reminderKey);
 				if (found >= 0) {
 					setActivePreview(found);
 					return previous;
@@ -65153,7 +65429,7 @@ const clearBtn = {
 	fontSize: 12,
 	cursor: "pointer"
 };
-const GROUP_CHAT_BUILD="local-workstudio-v1.0.0-r20";
+const GROUP_CHAT_BUILD="local-workstudio-v1.1.0";
 const GROUP_CHAT_CSS="\n.ac-group-chat {\n  --paper: light-dark(#fff,#222627);\n  --chat: light-dark(#f5f5f2,#1d2021);\n  --ink: light-dark(#242826,#e9ede9);\n  --muted: light-dark(#626a65,#aeb8b1);\n  --line: light-dark(#dce0da,#3d433f);\n  --quiet: light-dark(#eef1ec,#303632);\n  --green: light-dark(#296547,#b4ddbb);\n  --on-green: light-dark(#fff,#193021);\n  --error: light-dark(#a03c31,#ffada2);\n  --bubble-strength: 100%;\n  --bubble-gap: 19px;\n  width: 100%; min-width: 0; color: var(--ink); text-align: start;\n  font: 15px/1.55 \"Inter\",\"Microsoft YaHei UI\",\"Microsoft YaHei\",\"PingFang SC\",sans-serif;\n}\n.ac-group-chat *, .ac-group-chat *::before, .ac-group-chat *::after { box-sizing: border-box; }\n.ac-group-chat [hidden] { display: none !important; }\n.ac-group-chat :is(h1,p,ol) { margin: 0; padding: 0; }\n.ac-group-chat button, .ac-group-chat textarea { font: inherit; color: inherit; }\n.ac-group-chat button { border: 0; margin: 0; padding: 0; background: transparent; cursor: var(--cursor-interaction,pointer); }\n.ac-group-chat button:disabled { cursor: default; opacity: .52; }\n.ac-group-chat :focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }\n.ac-group-chat .br-window { background: var(--chat); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }\n.ac-group-chat .br-top { display: flex; align-items: center; gap: 12px; padding: 14px 22px; background: var(--paper); }\n.ac-group-chat h1 { font-size: clamp(17px,2.2vw,21px); line-height: 1.4; font-weight: 600; letter-spacing: -.015em; }\n.ac-group-chat .br-roster { margin-top: 1px; color: var(--muted); font-size: 12px; }\n.ac-group-chat .br-group-avatar { display: grid; flex: none; grid-template-columns: repeat(2,1fr); gap: 2px; width: 39px; height: 39px; border-radius: 9px; overflow: hidden; }\n.ac-group-chat [data-actor=\"me\"] { --bubble: light-dark(#ceecb8,#37533b); --tile: light-dark(#b4d995,#3a6244); --person: light-dark(#37592f,#d4efc9); }\n.ac-group-chat [data-actor=\"yun\"] { --bubble: light-dark(#e0edf6,#2a3b47); --tile: light-dark(#c5dce9,#354f60); --person: light-dark(#345d76,#c8e3f7); }\n.ac-group-chat [data-actor=\"ba\"] { --bubble: light-dark(#ebe5f2,#3c3446); --tile: light-dark(#dacee4,#51405b); --person: light-dark(#604770,#e9d8f5); }\n.ac-group-chat [data-actor=\"di\"] { --bubble: light-dark(#f6ecd9,#433a2c); --tile: light-dark(#e9d7b6,#584930); --person: light-dark(#745128,#f0d8b3); }\n.ac-group-chat .br-group-avatar span, .ac-group-chat .br-avatar { display: grid; place-items: center; color: var(--person); background: var(--tile); font-weight: 600; line-height: 1; }\n.ac-group-chat .br-group-avatar span { font-size: 10px; }\n.ac-group-chat .br-btn-row { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }\n.ac-group-chat .br-button { min-height: 30px; padding: 3px 2px; font-size: 13px; color: var(--muted); }\n.ac-group-chat .br-primary { color: var(--green); font-weight: 600; }\n.ac-group-chat .br-button:hover, .ac-group-chat .br-retry:hover { text-decoration: underline; }\n.ac-group-chat .br-picker { align-self: flex-end; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 4px; max-width: 100%; }\n.ac-group-chat .br-picker-title { font-size: 14px; font-weight: 600; }\n.ac-group-chat .br-fine { font-size: 12px; color: var(--muted); }\n.ac-group-chat .br-option { display: flex; align-items: center; gap: 7px; min-height: 28px; font-size: 13px; }\n.ac-group-chat .br-option input { accent-color: var(--green); margin: 0; }\n.ac-group-chat .br-history { padding: 20px 24px; border-top: 1px solid var(--line); flex:1; min-height:0; overflow-y: auto; overflow-anchor: none; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: transparent transparent; }\n.ac-group-chat .br-history:hover, .ac-group-chat .br-history:focus-within { scrollbar-color: var(--line) transparent; }\n.ac-group-chat .br-log { list-style: none; display: flex; flex-direction: column; gap: var(--bubble-gap); }\n.ac-group-chat .br-row { display: flex; align-items: flex-start; gap: 10px; }\n.ac-group-chat .br-row[data-actor=\"me\"] { flex-direction: row-reverse; }\n.ac-group-chat .br-avatar { flex: 0 0 35px; height: 35px; border-radius: 8px; font-size: 15px; }\n.ac-group-chat .br-msg { display: flex; align-items: flex-start; flex-direction: column; gap: 4px; max-width: min(78%,44rem); min-width: 0; }\n.ac-group-chat .br-row[data-actor=\"me\"] .br-msg { align-items: flex-end; }\n.ac-group-chat .br-by { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; color: var(--muted); font-size: 12px; line-height: 1.35; }\n.ac-group-chat .br-by time { font-variant-numeric: tabular-nums; font-size: 11px; }\n.ac-group-chat .br-bubble { position: relative; max-width: 100%; padding: 8px 12px; border-radius: 8px; background: var(--bubble); background: color-mix(in srgb,var(--bubble) var(--bubble-strength),var(--paper)); white-space: pre-wrap; overflow-wrap: anywhere; }\n.ac-group-chat .br-bubble::before { content: \"\"; position: absolute; width: 7px; height: 7px; inset-inline-start: -3px; top: 13px; transform: rotate(45deg); background: inherit; }\n.ac-group-chat .br-row[data-actor=\"me\"] .br-bubble::before { inset-inline-start: auto; inset-inline-end: -3px; }\n.ac-group-chat .br-ping { color: var(--person); font-weight: 550; }\n.ac-group-chat .br-delivery { font-size: 12px; color: var(--muted); }\n.ac-group-chat .br-retry { min-height: 24px; color: var(--error); font-size: 12px; }\n.ac-group-chat .br-compose { padding: 12px 20px 13px; background: var(--paper); border-top: 1px solid var(--line); }\n.ac-group-chat .br-inputbox { display: flex; gap: 9px; align-items: center; }\n.ac-group-chat textarea { flex: 1; min-width: 0; min-height: 36px; padding: 7px 9px; border: 1px solid transparent; border-radius: 6px; background: transparent; resize: none; line-height: 1.5; }\n.ac-group-chat textarea::placeholder { color: var(--muted); }\n.ac-group-chat .br-at { width: 32px; min-height: 34px; color: var(--muted); border-radius: 6px; font-size: 21px; line-height: 1; }\n.ac-group-chat .br-at:hover, .ac-group-chat .br-at[aria-expanded=\"true\"] { background: var(--quiet); color: var(--ink); }\n.ac-group-chat .br-send { min-height: 34px; border-radius: 6px; padding: 5px 15px; font-size: 14px; font-weight: 550; color: var(--on-green); background: var(--green); }\n.ac-group-chat .br-send:disabled { background: var(--quiet); color: var(--muted); opacity: 1; }\n.ac-group-chat .br-mentions { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }\n.ac-group-chat .br-mentions button { min-height: 31px; border-radius: 5px; padding: 4px 9px; font-size: 13px; color: var(--green); background: var(--quiet); }\n.ac-group-chat .br-screenreader { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }\n@media (max-width: 530px) {\n  .ac-group-chat .br-top { padding: 12px 14px; gap: 10px; }\n  .ac-group-chat .br-history { padding: 16px 13px; }\n  .ac-group-chat .br-msg { max-width: calc(100% - 46px); }\n  .ac-group-chat .br-compose { padding: 8px 11px; }\n}\n@media (pointer: coarse) {\n  .ac-group-chat button, .ac-group-chat .br-option { min-height: 44px; }\n  .ac-group-chat .br-at { min-width: 44px; }\n  .ac-group-chat textarea { font-size: 16px; }\n}\n\n.ac-group-chat{display:flex;flex-direction:column;height:100%;min-height:0;position:relative;background:var(--chat);border:1px solid var(--line);border-radius:12px;overflow:hidden}\n.ac-group-chat .br-top{flex:none;border-bottom:1px solid var(--line)}\n.ac-group-chat .br-list-toggle{display:grid;place-items:center;width:28px;min-width:28px;height:30px;color:var(--muted)}\n.ac-group-chat .br-heading{min-width:0}.ac-group-chat h1{font-size:19px;overflow-wrap:anywhere}\n.ac-group-chat .br-history{border-top:0;position:relative}.ac-group-chat .br-history-more{align-self:center}\n.ac-group-chat .br-bubble{white-space:normal}.ac-group-chat [data-actor=me] .br-bubble{white-space:pre-wrap}\n.ac-group-chat .br-bubble p{margin:0}.ac-group-chat .br-bubble p+p{margin-top:8px}\n.ac-group-chat .br-bubble :is(pre,table){max-width:100%;overflow-x:auto}.ac-group-chat .br-bubble pre{white-space:pre}\n.ac-group-chat .br-msg{position:relative}.ac-group-chat .br-reply{position:absolute;bottom:-18px;inset-inline-end:0;font-size:11px;color:var(--muted);opacity:0}.ac-group-chat .br-row:hover .br-reply,.ac-group-chat .br-reply:focus-visible{opacity:1}\n.ac-group-chat .br-compose{flex:none;display:block;width:100%;max-width:none;padding:12px 20px 13px;position:relative;background:var(--paper);border:0;border-top:1px solid var(--line)}\n.ac-group-chat .br-compose > .ac-composer-resize { margin: -12px 0 0; }\n.ac-group-chat .br-compose > .ac-composer-resize::before { background: color-mix(in srgb, var(--muted) 55%, var(--paper)); }\n.ac-group-chat .br-compose > .ac-composer-resize:is(:hover, :focus-visible, [data-dragging])::before { background: var(--muted); }\n.ac-group-chat .br-inputbox { align-items: flex-end; }\n.ac-group-chat .br-inputbox textarea { width: 100%; color: var(--ink); overflow-y: auto; }\n.ac-group-chat .br-inputbox textarea:focus{outline:none;border-color:var(--line)}\n.ac-group-chat .br-mentions{margin-bottom:8px}.ac-group-chat .br-send{flex:none}\n.ac-group-chat .br-inline-card,.ac-group-chat .br-file{list-style:none;max-width:100%;min-width:0}\n.ac-group-chat .br-latest{position:sticky;bottom:0;float:right;border:1px solid var(--line);border-radius:16px;padding:5px 12px;background:var(--paper);font-size:12px}\n.ac-group-chat .br-picker{max-width:min(100%,420px)}\n.ac-group-chat .br-reply-quote{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);margin-bottom:8px}\n.ac-group-chat .br-reply-quote span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}\n@media(pointer:coarse){.ac-group-chat .br-reply{opacity:1}}\n.ac-group-chat .br-compose > .ac-composer-resize { cursor: ns-resize; touch-action: none; }\n.ac-group-chat .br-inputbox {\n  border: 1.5px solid light-dark(#829387,#82958a);\n  border-radius: 12px;\n  background: light-dark(#fbfcfa,#252c28);\n  padding: 6px 8px;\n  gap: 6px;\n}\n.ac-group-chat .br-inputbox:focus-within {\n  border-color: var(--green);\n  box-shadow: 0 0 0 1px var(--green);\n}\n.ac-group-chat .br-inputbox textarea:focus { border-color: transparent; }\n.ac-group-chat .br-bot-bubble { font-size: 15.5px; line-height: 1.65; max-width: min(100%,35em); padding: 9px 13px; }\n.ac-group-chat .br-bot-bubble :is(ul,ol) { padding-inline-start: 1.35em; }\n.ac-group-chat .br-bot-bubble a { text-decoration: underline; }\n.ac-group-chat .br-reply-question { font-weight: 600; }\n.ac-group-chat .br-more-text, .ac-group-chat .br-receipt-action {\n  min-height: 24px;\n  color: var(--green);\n  font-size: 12px;\n  text-decoration: underline;\n  text-underline-offset: 2px;\n}\n.ac-group-chat .br-more-text { margin-block-start: 7px; }\n.ac-group-chat .br-members { max-width: 100%; display: grid; justify-items: end; gap: 3px; margin-block-start: 4px; }\n.ac-group-chat .br-person-status {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  justify-content: flex-end;\n  column-gap: 7px;\n  color: var(--muted);\n  font-size: 12px;\n}\n.ac-group-chat .br-person-label { color: var(--ink); font-weight: 600; }\n.ac-group-chat .br-person-status:is([data-member-status=\"running\"],[data-member-status=\"replied\"]) [role=\"status\"] { color: var(--green); }\n.ac-group-chat .br-person-status:is([data-member-status=\"unconfirmed\"],[data-member-status=\"failed\"],[data-member-status=\"interrupted\"]) [role=\"status\"] {\n  color: light-dark(#805514,#eac182);\n}\n.ac-group-chat .br-person-detail { overflow-wrap: anywhere; }\n@media (max-width: 530px) {\n  .ac-group-chat .br-compose { padding-inline: 11px; }\n  .ac-group-chat .br-inputbox { padding-inline: 4px; }\n}\n.ac-group-chat .br-work-bubble {width:fit-content;max-width:100%;overflow-wrap:anywhere}\n.ac-group-chat .br-work-bubble [role=\"status\"] {color:var(--ink)}\n.ac-group-chat .br-work-bubble .br-retry {display:block;margin-top:5px}\n.ac-group-chat .br-avatar img {width:100%;height:100%;object-fit:cover;border-radius:inherit}\n@media (prefers-reduced-motion:no-preference) {\n .ac-group-chat .br-work-bubble[data-work-phase=\"thinking\"] [role=\"status\"] {animation:br-thinking-pulse 2.1s ease-in-out infinite}\n}\n@keyframes br-thinking-pulse {50%{opacity:.73}}\n";
 function groupActor(bot) {
  const name=bot?.name??"";
@@ -65281,8 +65557,11 @@ function GroupWorkReply({run, room, name, remote, onReload, member}) {
   const archived=failed && /session ([\da-f-]{36}) is archived\b/iu.test(run.error??run.lastError??"");
   const phase=failed ? "failed" : run.status==="completed" ? "publishing" : run.groupWork?.phase ?? (run.status==="queued" ? "queued" : "checking");
   const fullText=run.groupWork?.text;
+  const issue=run.error??run.lastError??"";
+  const modelIssue=/宿主待授权|模型.*授权|缺少凭据|missing.credentials|UNAUTHORIZED|credential/i.test(issue)?"宿主待授权，请核对该 Bot 在 DP 中选择的模型":
+    /DP 模型调用失败|指定模型调用失败|模型目录已变化/.test(issue)?"DP 模型调用失败，请检查该提供方":undefined;
   const label=recovery?(recovery.reason??recovery.receipt?.text??"这条消息已接回原单。"):failed ? archived ? "发送时原 Codex 对话已归档，模型未启动" :
-    run.failureKind==="timeout" ? "等待回复超时" : run.failureKind==="no-progress" ? "长时间没有新进展" : "这次回复失败" :
+    modelIssue ?? (run.failureKind==="timeout" ? "等待回复超时" : run.failureKind==="no-progress" ? "长时间没有新进展" : "这次回复失败") :
     phase==="publishing" ? "正在载入回复…" : fullText?.replace(/^[^：]*：/u,"") ?? (phase==="queued" ? "已排队，尚未开工" : "正在核对原回合状态");
   async function retry() {
     if (lock.current) return;
@@ -65338,7 +65617,7 @@ function GroupMessageFeedback({entry,room,runs,bots,remote,onReload}){
    jsx("p",{className:"br-fine",children:"30 秒后收起，可以照常发消息。"}),
    ...choice.choices.map(item=>jsxs("label",{className:"br-option",children:[
     jsx("input",{type:"radio",name:"task-"+messageId,value:item.taskKey,checked:selected===item.taskKey,
-     onChange:()=>select(item.taskKey)}),
+     onChange:()=>{select(item.taskKey);if(choice.intent==="append")void act({taskKey:item.taskKey});}}),
     jsx("span",{children:item.label||"原任务"})
    ]},item.taskKey)),
    jsxs("div",{className:"br-btn-row",children:[
@@ -65378,7 +65657,7 @@ function installReminderNavigation(remote,selectPanel){
   if(stop||busy||document.hidden||!document.hasFocus())return;
   busy=true;
   try{
-   if(!reported){await remote.taskReminder({op:"client-ready",build:GROUP_CHAT_BUILD,desktop:/Electron\//u.test(navigator.userAgent)});reported=true;}
+   if(!reported){reported=true;await remote.taskReminder({op:"client-ready",build:GROUP_CHAT_BUILD,desktop:/Electron\//u.test(navigator.userAgent)}).catch(()=>{});}
    const {workspaceId,route}=await remote.taskReminder({op:"poll"});
    if(!route||stop||route.id===cancelledRoute)return;
    if(currentReminderRoute?.id===route.id){if(!currentReminderRoute.located)selectPanel();return;}
@@ -65402,14 +65681,259 @@ function installReminderNavigation(remote,selectPanel){
  check();
  return ()=>{stop=true;clearTimeout(timer);clearInterval(repeat);window.removeEventListener("focus",schedule);window.removeEventListener("dsh-bots-reminder-open",schedule);document.removeEventListener("visibilitychange",schedule);};
 }
-function ReminderHistory({remote}){
+const REMINDER_BOARD_STYLE = ".wsp-rb-menu{margin-left:auto;flex:none;--ink:light-dark(#142826,#edf4ef);--muted:light-dark(#586b67,#c0d0c7);--dim:light-dark(#677a74,#aec2b7);--teal-dark:light-dark(#104a43,#b7e4d5);font-family:'Segoe UI','Microsoft YaHei UI','Microsoft YaHei',sans-serif}\n.wsp-rb-menu *,.wsp-rb-menu *::before,.wsp-rb-menu *::after{box-sizing:border-box}\n.wsp-rb-menu button{font-family:inherit;cursor:pointer}.wsp-rb-menu button:disabled{cursor:default}\n.wsp-rb-menu button:focus-visible{outline:2px solid #3b9c83;outline-offset:2px}.wsp-rb-menu [hidden]{display:none!important}\n.wsp-rb-icon{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-reminder-trigger{ flex: none; display: inline-flex; align-items: center; gap: 9px; min-height: 43px; border: 1px solid light-dark(#b9d6c9,#486c61); border-radius: 9px; background: light-dark(#edf6f0,#22382f); padding: 0 11px; color: var(--teal-dark); font-size: 14px; font-weight: 680; transition: background .16s, color .16s, border-color .16s, box-shadow .16s; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-reminder-trigger:hover{ background: light-dark(#dfeee5,#2b493d); border-color: light-dark(#94c0ae,#719f8e); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-reminder-trigger[aria-expanded=\"true\"]{ color: #fff; background: var(--teal-dark); border-color: var(--teal-dark); box-shadow: 0 2px 5px #12433c32; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-reminder-trigger .wsp-rb-button-count{ display: grid; place-items: center; min-width: 21px; height: 20px; padding: 0 4px; border-radius: 5px; color: var(--teal-dark); background: light-dark(#d6eadf,#345449); font-size: 11px; font-variant-numeric: tabular-nums; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-reminder-trigger[aria-expanded=\"true\"] .wsp-rb-button-count{ background: #ffffff2c; color: #fff; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-chevron{ width: 14px; height: 14px; transition: transform .16s; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-reminder-trigger[aria-expanded=\"true\"] .wsp-rb-chevron{ transform: rotate(180deg); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel{ position: absolute; z-index: 4; right: 24px; top: calc(100% + 12px); width: min(410px, calc(100cqi - 48px)); max-height: min(calc(100dvh - 165px), calc(100% + var(--wsp-rb-available, 580px))); display: flex; flex-direction: column; background: light-dark(#fff,#25372f); border: 1px solid light-dark(#d6e4dd,#40564c); border-radius: 16px; box-shadow: 0 19px 50px #23453b23, 0 3px 8px #23453b0d; animation: wsp-rb-reveal .17s ease-out; }\n@keyframes wsp-rb-reveal { from { opacity: .55; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel::before{ content: \"\"; position: absolute; width: 11px; height: 11px; top: -6px; right: 51px; background: light-dark(#fff,#25372f); border-top: 1px solid light-dark(#d6e4dd,#40564c); border-left: 1px solid light-dark(#d6e4dd,#40564c); transform: rotate(45deg); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-heading{ display: flex; align-items: flex-start; gap: 11px; padding: 18px 18px 15px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-emblem{ width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; color: var(--teal-dark); background: light-dark(#e9f3ed,#2b4438); border: 1px solid light-dark(#dbece2,#3d5b4e); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-emblem .wsp-rb-icon{ width: 19px; height: 19px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel h2{ margin: 0 0 3px; font-size: 19px; line-height: 1.25; font-weight: 700; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-heading p{ margin: 0; font-size: 12px; color: var(--muted); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-icon-button{ width: 33px; height: 33px; flex: none; display: grid; place-items: center; background: light-dark(#f3f6f4,#263831); color: var(--muted); border: 1px solid light-dark(#e4ece7,#3d5247); border-radius: 8px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-icon-button:hover{ background: light-dark(#e7efea,#344b40); color: var(--ink); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-heading .wsp-rb-icon-button{ margin-left: auto; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-icon-button .wsp-rb-icon{ width: 15px; height: 15px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-filters{ display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 5px; margin: 0 18px 15px; border: 1px solid light-dark(#e4ece7,#3d5247); background: light-dark(#f3f6f4,#263831); border-radius: 9px; padding: 4px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-filter{ border: 1px solid transparent; border-radius: 6px; min-width: 0; min-height: 32px; background: transparent; padding: 0 3px; display: flex; align-items: center; justify-content: center; gap: 4px; color: var(--muted); font-size: 12px; white-space: nowrap; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-filter span{ display: inline-grid; place-items: center; min-width: 14px; height: 16px; border-radius: 4px; background: light-dark(#e7eeea,#394f44); color: light-dark(#52655d,#c5d7ce); font-size: 10px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-filter:hover{ background: light-dark(#e8f0eb,#32483d); color: var(--teal-dark); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-filter[aria-pressed=\"true\"]{ background: light-dark(#fff,#25372f); border-color: light-dark(#d9e7de,#567263); color: var(--teal-dark); box-shadow: 0 1px 2px #11392c10; font-weight: 700; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-filter[aria-pressed=\"true\"] span{ background: light-dark(#e6f1e9,#304c40); color: var(--teal-dark); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-list{ padding: 0 18px 16px; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-color: #c4d8ce transparent; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-group + .wsp-rb-task-group{ margin-top: 16px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-section-title{ display: flex; align-items: center; gap: 8px; margin: 0 1px 8px; color: var(--muted); font-size: 12px; font-weight: 650; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-section-title::after{ content: \"\"; height: 1px; flex: 1; background: light-dark(#edf1ee,#3b5147); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-card{ border: 1px solid light-dark(#e0e9e4,#3a5448); border-radius: 10px; overflow: hidden; background: light-dark(#fff,#25372f); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-card + .wsp-rb-card{ margin-top: 7px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-card:hover,.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-card:focus-within{ border-color: light-dark(#a9cbbd,#729c8c); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-card.wsp-rb-attention{ background: light-dark(#fffcf7,#382f25); border-color: light-dark(#eadcc4,#655137); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-card.wsp-rb-attention:hover,.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-card.wsp-rb-attention:focus-within{ border-color: light-dark(#cbb186,#a58252); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-button{ display: grid; grid-template-columns: 30px minmax(0,1fr) auto; align-items: start; gap: 9px; width: 100%; text-align: left; padding: 10px; border: 0; background: transparent; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-button:focus-visible{ outline-offset: -3px; border-radius: 10px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-icon{ width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-icon .wsp-rb-icon{ width: 15px; height: 15px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-pending{ color: light-dark(#8b5417,#f3c98d); background: light-dark(#f8ecd7,#573d26); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-running{ color: light-dark(#285b80,#aed6f6); background: light-dark(#e7f0f8,#314858); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-done{ color: light-dark(#205f49,#b3e5cd); background: light-dark(#e6f1e9,#304c40); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-copy{ min-width: 0; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-title{ display: block; font-size: 14px; line-height: 1.35; font-weight: 680; overflow-wrap: anywhere; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-meta{ margin-top: 5px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; line-height: 1.4; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-meta .wsp-rb-dot{ color: light-dark(#7a8c83,#a4baae); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-side{ display: flex; gap: 4px; align-items: center; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-state{ display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; min-height: 20px; padding: 0 6px; font-size: 11px; font-weight: 650; white-space: nowrap; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-side .wsp-rb-chevron{ width: 12px; height: 12px; color: var(--dim); transform: rotate(-90deg); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-button[aria-expanded=\"true\"] .wsp-rb-task-side .wsp-rb-chevron{ transform: rotate(0); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-details{ padding: 0 10px 11px 49px; font-size: 12px; color: var(--muted); line-height: 1.55; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-task-details p{ margin: 0 0 9px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-locate{ display: inline-flex; align-items: center; gap: 5px; min-height: 29px; border: 1px solid light-dark(#c3d9cd,#567466); border-radius: 6px; padding: 0 8px; background: light-dark(#f4f8f5,#2a4036); font-size: 11px; font-weight: 650; color: var(--teal-dark); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-locate:hover{ background: light-dark(#e5f1e9,#365447); }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-locate .wsp-rb-icon{ width: 13px; height: 13px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-footer{ padding: 10px 18px; display: flex; align-items: center; gap: 6px; border-top: 1px solid light-dark(#e8efea,#3d554a); color: var(--muted); background: light-dark(#f8faf8,#24342d); border-radius: 0 0 16px 16px; font-size: 10.5px; }\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-footer .wsp-rb-icon{ width: 13px; height: 13px; }\n\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-reminder-trigger[aria-expanded='true']{background:#104a43;border-color:#104a43;color:#fff}\n.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel{color:var(--ink);z-index:32}.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-list{flex:1 1 auto}.wsp-rb-panel-heading,.wsp-rb-filters,.wsp-rb-panel-footer{flex-shrink:0}.wsp-rb-empty{padding:9px 0;color:var(--muted);font-size:12px}\n.wsp-rb-task-details p[role=alert]{margin:7px 0 0}.wsp-rb-panel-footer button{margin-left:auto}\n.dsh-plugin-community-page .ac-group-chat .br-top:has(.wsp-rb-menu){position:relative;overflow:visible;z-index:12;min-height:72px;padding-right:24px}\n.br-row[data-board-target]{outline:2px solid #6ba991;outline-offset:-2px;border-radius:8px}\n@container (min-width:900px){.dsh-plugin-community-page .ac-group-chat:has(.wsp-rb-panel) .br-history{padding-right:452px}}\n@container (max-width:870px){.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel{width:min(390px,calc(100cqi - 32px));right:16px}.dsh-plugin-community-page .ac-group-chat .br-top:has(.wsp-rb-menu){padding-right:16px}}\n@container (max-width:520px){.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel{width:min(390px,calc(100cqi - 24px));right:12px;top:calc(100% + 10px);max-height:calc(100dvh - 155px)}.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel::before{right:42px}.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-reminder-trigger{gap:5px;padding:0 7px;font-size:12px}.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-reminder-trigger .wsp-rb-icon{height:14px;width:14px}.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-heading{padding:14px 12px 12px}.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-filters{margin:0 12px 12px}.dsh-plugin-community-page .wsp-rb-menu .wsp-rb-panel-list{padding-right:12px;padding-left:12px}.dsh-plugin-community-page .ac-group-chat .br-top:has(.wsp-rb-menu){min-height:64px;padding-right:12px}}\n@media(prefers-reduced-motion:reduce){.wsp-rb-menu *,.wsp-rb-menu *::before{transition:none!important;animation:none!important}}";
+const REMINDER_ICONS = {"grid":[["rect",{"x":"4","y":"4","width":"7","height":"7","rx":"1.2"}],["rect",{"x":"13","y":"4","width":"7","height":"7","rx":"1.2"}],["rect",{"x":"4","y":"13","width":"7","height":"7","rx":"1.2"}],["rect",{"x":"13","y":"13","width":"7","height":"7","rx":"1.2"}]],"board":[["rect",{"x":"5","y":"4","width":"14","height":"16","rx":"3"}],["path",{"d":"M9 9h6m-6 4h6m-6 4h4"}]],"chevron":[["path",{"d":"m6 9 6 6 6-6"}]],"x":[["path",{"d":"m6 6 12 12M18 6 6 18"}]],"minus":[["path",{"d":"M5 12h14"}]],"square":[["rect",{"x":"5","y":"5","width":"14","height":"14","rx":"1"}]],"plus":[["path",{"d":"M6 12h12m-6-6v12"}]],"people":[["circle",{"cx":"9","cy":"8","r":"3"}],["path",{"d":"M3 19v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1m1-13a3 3 0 0 1 0 6m2 2a4 4 0 0 1 3 4v1"}]],"at":[["circle",{"cx":"12","cy":"12","r":"3"}],["path",{"d":"M15 9v4a2 2 0 0 0 4 0v-1a7 7 0 1 0-3 5.8"}]],"clock":[["circle",{"cx":"12","cy":"12","r":"8"}],["path",{"d":"M12 8v4l3 2"}]],"alert":[["path",{"d":"M12 8v5m0 3h.01M10.3 4.9 3.5 17a2 2 0 0 0 1.7 3h13.6a2 2 0 0 0 1.7-3L13.7 4.9a2 2 0 0 0-3.4 0Z"}]],"check":[["circle",{"cx":"12","cy":"12","r":"8"}],["path",{"d":"m8.5 12 2.4 2.5 4.7-5"}]],"reply":[["path",{"d":"m9 6-6 6 6 6m-6-6h11a5 5 0 0 1 5 5v2"}]],"info":[["circle",{"cx":"12","cy":"12","r":"8"}],["path",{"d":"M12 11v4m0-7h.01"}]]};
+function reminderIcon(name,kind=""){return jsx("svg",{className:"wsp-rb-icon "+kind,viewBox:"0 0 24 24","aria-hidden":true,children:REMINDER_ICONS[name].map(([tag,props],i)=>jsx(tag,props,i))});}
+const REMINDER_BOARD_BUILD = "1.1.6";
+const REMINDER_STATES = {
+ pending: { label: "待处理", icon: "alert" },
+ running: { label: "进行中", icon: "clock" },
+ done: { label: "已完成", icon: "check" }
+};
+const REMINDER_FILTERS = [["all", "全部"], ...Object.entries(REMINDER_STATES).map(([key, state]) => [key, state.label])];
+const reminderTime = value => Number.isFinite(Date.parse(value)) ?
+ new Date(value).toLocaleTimeString("zh-CN", {hour:"2-digit",minute:"2-digit",hour12:false}) : "";
+const reminderDate = (...values) => values.filter(value => Number.isFinite(Date.parse(value))).sort((a,b) => Date.parse(b)-Date.parse(a))[0];
+const reminderSourceText = value => typeof value === "string" ? value.replace(/\s+/gu," ").trim().slice(0,96) : "";
+
+function roomReminderCards(room, bots, runs, entries, feed) {
+ const sequences = (room.mentionSequences ?? []).filter(row => row.mode==="orchestrated" && !row.orderedChat && row.taskKey);
+ const byTask = new Map(sequences.map(row => [row.taskKey,row]));
+ const messages = new Map(entries.filter(row => row.type==="user").map(row => [row.messageId??row.id,row]));
+ const byRun = new Map(runs.map(run => [run.id,run]));
+ const names = new Map(bots.map(bot => [bot.id,groupName(bot)]));
+ const events = new Map();
+ for (const event of [...(room.taskReminders??[]),...(feed?.events??[])]) {
+  if (event.roomId===room.id) events.set(event.key,event);
+ }
+ const cards = new Map();
+ const put = (id, row) => {
+  const previous = cards.get(id);
+  if (!previous || row.state==="done" || (previous.state!=="done" && (Date.parse(row.at)||0)>=(Date.parse(previous.at)||0))) {
+   cards.set(id,{id,...row});
+  }
+ };
+ const roundKey = (taskId,messageId) => taskId+"|"+messageId;
+ for (const sequence of sequences) {
+  const messageId = sequence.activeRequestId ?? sequence.taskCard?.origin;
+  if (!messageId || sequence.status==="stopped") continue;
+  const step = sequence.steps?.[sequence.currentIndex];
+  const run = byRun.get(step?.runId);
+  const origin = messages.get(messageId)??messages.get(sequence.taskCard?.origin);
+  const activity = room.teamTaskActivity?.taskId===sequence.taskKey ? room.teamTaskActivity : undefined;
+  const missing = activity?.detail || sequence.missing?.[0];
+  const processing = ["running","stopping","verifying","pending-delivery"].includes(sequence.status) ||
+   (run?.status==="running" && ["running","delivered"].includes(step?.status));
+  const state = sequence.status==="completed" ? "done" : missing || sequence.status==="pending-review" || !processing ? "pending" : "running";
+  const summary = missing || activity?.text || (state==="running" ? "正在处理" : state==="pending" ? "等待接单或回执" : "");
+  const owner = names.get(activity?.owner ?? sequence.taskCard?.owner ?? step?.botId ?? sequence.firstBotId);
+  put(roundKey(sequence.taskKey,messageId),{
+   taskId:sequence.taskKey,messageId,state,owner,summary,detail:summary,
+   title:reminderSourceText(sequence.title)||reminderSourceText(origin?.text)||"群任务",
+   at:reminderDate(activity?.progressAt,run?.lastProgressAt,run?.finishedAt,run?.updatedAt,run?.startedAt,run?.createdAt,origin?.at)
+  });
+ }
+ for (const receipt of room.teamMemberReceipts ?? []) {
+  const origin = messages.get(receipt.messageId);
+  const unresolved = receipt.members?.filter(member => !["replied","stopped"].includes(member.status)) ?? [];
+  if (!unresolved.length) continue;
+  const current = unresolved.find(member => member.status==="running") ?? unresolved[0];
+  const memberRun = runs.find(run => run.dispatchId && run.dispatchId===current.dispatchId);
+  const taskId = origin?.taskRef ?? [...events.values()].find(event => event.roundId===receipt.messageId)?.taskId ?? receipt.messageId;
+  put(roundKey(taskId,receipt.messageId),{
+   taskId,messageId:receipt.messageId,state:current.status==="running"?"running":"pending",
+   title:reminderSourceText(origin?.text)||"成员派单",owner:names.get(current.botId),summary:current.label,
+   detail:current.detail||current.label,at:reminderDate(memberRun?.lastProgressAt,memberRun?.updatedAt,origin?.at)
+  });
+ }
+ const orderedEvents = [...events.values()].sort((a,b) => (Date.parse(a.at)||0)-(Date.parse(b.at)||0));
+ for (const event of orderedEvents) {
+  if (!event.effective || !event.taskId || !event.messageId || !["done","waiting","stopped"].includes(event.kind)) continue;
+  const sequence = byTask.get(event.taskId);
+  const currentMessageId = sequence?.activeRequestId ?? sequence?.taskCard?.origin;
+  const eventRound = event.roundId??event.messageId;
+  const id = roundKey(event.taskId,eventRound);
+  const activeId = currentMessageId && roundKey(event.taskId,currentMessageId);
+  const sameRound = !currentMessageId || [currentMessageId, sequence?.taskCard?.origin].includes(eventRound);
+  const previous = cards.get(id) ?? (sameRound ? cards.get(activeId) : undefined);
+  if (event.kind==="stopped") {
+   cards.delete(id);
+   if (sameRound) cards.delete(activeId);
+   continue;
+  }
+  if (event.kind==="waiting" && sameRound && ["completed","stopped"].includes(sequence?.status)) continue;
+  if (sameRound && activeId!==id) cards.delete(activeId);
+  const owner = previous?.owner ?? names.get(event.kind==="done" ? sequence?.reviewerId ?? sequence?.firstBotId :
+   sequence?.taskCard?.owner ?? sequence?.steps?.[sequence.currentIndex]?.botId);
+  const title = reminderSourceText(event.title);
+  put(id,{
+   taskId:event.taskId,messageId:event.messageId,key:event.key,state:event.kind==="done"?"done":"pending",
+   title:title && title!=="群任务" ? title : previous?.title || reminderSourceText(messages.get(eventRound)?.text) || "群任务",
+   owner,at:event.at,summary:event.kind==="waiting"?reminderSourceText(event.text):"",detail:event.text
+  });
+ }
+ return [...cards.values()].sort((a,b) =>
+  Number(b.state==="pending")-Number(a.state==="pending") || (Date.parse(b.at)||0)-(Date.parse(a.at)||0));
+}
+
+function ReminderBoard({room,bots,runs,entries,remote,onLocate}) {
+ const [opened,setOpened] = useState(false);
+ const [filter,setFilter] = useState("all");
+ const [expanded,setExpanded] = useState([]);
+ const [feed,setFeed] = useState(null);
+ const [failure,setFailure] = useState("");
+ const [attempt,setAttempt] = useState(0);
+ const [locating,setLocating] = useState(null);
+ const [locateError,setLocateError] = useState(null);
+ const trigger = useRef(null), panel = useRef(null), inFlight = useRef(null);
+ const cards = roomReminderCards(room,bots,runs,entries,feed);
+ const counts = {all:cards.length,pending:0,running:0,done:0};
+ for (const card of cards) counts[card.state]++;
+ const pendingCount = counts.pending+counts.running;
+ const close = focus => {
+  setOpened(false);
+  if (focus) trigger.current?.focus({preventScroll:true});
+ };
+ useEffect(() => {
+  let live = true, busy = false;
+  async function refresh() {
+   if (!live || busy || document.hidden) return;
+   busy = true;
+   try {
+    const result = await remote.taskReminder({op:"list"});
+    if (!Array.isArray(result?.events)) throw Error("任务数据不可用");
+    if (live) { setFeed(result);setFailure(""); }
+   } catch {
+    if (live) setFailure("暂时无法读取任务提醒");
+   } finally { busy = false; }
+  }
+  void refresh();
+  const timer = setInterval(refresh,3000);
+  return () => {live=false;clearInterval(timer);};
+ },[remote,opened,attempt]);
+ useLayoutEffect(() => {
+  if (!opened || !panel.current) return;
+  const board=panel.current, chat=board.closest(".ac-group-chat");
+  if(!chat) return;
+  const fit=()=>{
+   const bottom=Math.min(window.innerHeight,chat.getBoundingClientRect().bottom);
+   const top=parseFloat(getComputedStyle(board).top)+board.offsetParent.getBoundingClientRect().top;
+   board.style.maxHeight=Math.max(0,Math.floor(bottom-top-12))+"px";
+  };
+  fit();
+  const observer=new ResizeObserver(fit);
+  observer.observe(chat);
+  observer.observe(board.offsetParent);
+  window.addEventListener("resize",fit);
+  return ()=>{observer.disconnect();window.removeEventListener("resize",fit);};
+ },[opened]);
+ useEffect(() => {
+  if (!opened) return;
+  panel.current?.querySelector('[aria-pressed="true"]')?.focus({preventScroll:true});
+  const keydown = event => {
+   if (event.key!=="Escape" || event.defaultPrevented || event.target?.closest("dialog,[role=dialog]")) return;
+   event.preventDefault();
+   close(true);
+  };
+  const outside = event => {
+   if (!panel.current?.contains(event.target) && !trigger.current?.contains(event.target)) {
+    close(panel.current?.contains(document.activeElement) && !event.target.closest?.("button,input,select,textarea,a[href],[tabindex]"));
+   }
+  };
+  document.addEventListener("keydown",keydown);
+  document.addEventListener("click",outside);
+  return () => {document.removeEventListener("keydown",keydown);document.removeEventListener("click",outside);};
+ },[opened]);
+ useEffect(() => () => {inFlight.current=null;},[]);
+ async function locate(card) {
+  if (inFlight.current) return;
+  const request = {};
+  inFlight.current=request;
+  setLocating(card.id);
+  setLocateError(null);
+  try {
+   await onLocate(card);
+   if (inFlight.current===request) close(false);
+  } catch (error) {
+   if (inFlight.current===request) setLocateError({id:card.id,message:/移除|未找到/u.test(error?.message??"")?"原消息已移除或不可用":"定位失败，请重试"});
+  } finally {
+   if (inFlight.current===request) {
+    inFlight.current=null;
+    setLocating(null);
+   }
+  }
+ }
+ const group = (title,items) => items.length>0 && jsxs("section",{className:"wsp-rb-task-group",children:[
+  jsx("h3",{className:"wsp-rb-section-title",children:title}),
+  ...items.map(card => {
+   const state = REMINDER_STATES[card.state];
+   const active = expanded.includes(card.id);
+   const target = "wsp-reminder-"+encodeURIComponent(card.id);
+   const meta = [card.owner,card.summary,reminderTime(card.at)].filter(Boolean);
+   return jsxs("article",{className:"wsp-rb-card"+(card.state==="pending"?" wsp-rb-attention":""),children:[
+    jsxs("button",{type:"button",className:"wsp-rb-task-button","aria-expanded":active,"aria-controls":target,onClick:()=>
+     setExpanded(previous=>active?previous.filter(id=>id!==card.id):[...previous,card.id]),children:[
+      jsx("span",{className:"wsp-rb-task-icon wsp-rb-"+card.state,children:reminderIcon(state.icon)}),
+      jsxs("span",{className:"wsp-rb-task-copy",children:[
+       jsx("strong",{className:"wsp-rb-task-title",children:card.title}),
+       meta.length>0&&jsx("span",{className:"wsp-rb-task-meta",children:meta.map((part,index)=>jsxs(Fragment,{children:[
+        index>0&&jsx("span",{className:"wsp-rb-dot","aria-hidden":true,children:"·"}),jsx("span",{children:part})
+       ]},index))})
+      ]}),
+      jsxs("span",{className:"wsp-rb-task-side",children:[
+       jsx("span",{className:"wsp-rb-state wsp-rb-"+card.state,children:state.label}),reminderIcon("chevron","wsp-rb-chevron")
+      ]})
+    ]}),
+    jsxs("div",{className:"wsp-rb-task-details",id:target,hidden:!active,children:[
+     card.detail&&jsx("p",{children:card.detail}),
+     jsxs("button",{type:"button",className:"wsp-rb-locate",disabled:locating!==null,onClick:()=>void locate(card),children:[
+      reminderIcon("reply"),locating===card.id?"正在定位…":"定位到群聊"
+     ]}),
+     locateError?.id===card.id&&jsx("p",{role:"alert",children:locateError.message})
+    ]})
+   ]},card.id);
+  })
+ ]});
+ const visible = filter==="all"?cards:cards.filter(card=>card.state===filter);
+ return jsxs("div",{className:"wsp-rb-menu","data-reminder-board-build":REMINDER_BOARD_BUILD,children:[
+  jsxs("button",{type:"button",ref:trigger,className:"wsp-rb-reminder-trigger","aria-expanded":opened,"aria-controls":"wsp-room-reminders",
+   "aria-label":"任务提醒，"+pendingCount+" 项待跟进",onClick:()=>opened?close(true):setOpened(true),children:[
+    reminderIcon("board"),jsx("span",{children:"任务提醒"}),
+    jsx("span",{className:"wsp-rb-button-count","aria-hidden":true,children:pendingCount}),reminderIcon("chevron","wsp-rb-chevron")
+   ]}),
+  opened&&jsxs("section",{ref:panel,className:"wsp-rb-panel",id:"wsp-room-reminders","aria-labelledby":"wsp-room-reminders-title",children:[
+   jsxs("header",{className:"wsp-rb-panel-heading",children:[
+    jsx("span",{className:"wsp-rb-panel-emblem",children:reminderIcon("board")}),
+    jsxs("div",{children:[jsx("h2",{id:"wsp-room-reminders-title",children:"任务提醒"}),
+     jsx("p",{children:(room.name||"当前群")+" · "+pendingCount+" 项待跟进"})]}),
+    jsx("button",{type:"button",className:"wsp-rb-icon-button","aria-label":"关闭任务提醒",onClick:()=>close(true),children:reminderIcon("x")})
+   ]}),
+   jsx("div",{className:"wsp-rb-filters",role:"group","aria-label":"按状态筛选",children:REMINDER_FILTERS.map(([key,label])=>
+    jsxs("button",{type:"button",className:"wsp-rb-filter","aria-pressed":filter===key,"aria-label":label+"，"+counts[key]+" 项",
+     onClick:()=>{setFilter(key);const list=panel.current?.querySelector(".wsp-rb-panel-list");if(list)list.scrollTop=0;},
+     children:[label,jsx("span",{"aria-hidden":true,children:counts[key]})]},key))}),
+   jsxs("div",{className:"wsp-rb-panel-list","aria-busy":!feed&&!failure,children:[
+    filter==="all"?[group("待跟进",visible.filter(card=>card.state!=="done")),group("最近完成",visible.filter(card=>card.state==="done"))]:
+     group(filter==="done"?"最近完成":REMINDER_STATES[filter].label,visible),
+    !visible.length&&jsx("p",{className:"wsp-rb-empty",role:"status",children:failure?failure:!feed?"正在加载任务提醒…":
+     filter==="all"?"当前群暂无任务提醒":"暂无"+REMINDER_STATES[filter].label+"任务"})
+   ]}),
+   jsxs("footer",{className:"wsp-rb-panel-footer",children:[
+    reminderIcon("info"),jsx("span",{role:failure?"status":undefined,children:failure?(feed?"更新失败，显示上次读取":"读取失败"):"任务状态随群聊更新"}),
+    failure&&jsx("button",{type:"button",className:"wsp-rb-locate",onClick:()=>setAttempt(value=>value+1),children:"重试"})
+   ]})
+  ]})
+ ]});
+}
+
+function ReminderHistory({remote,onClose}){
  const [feed,setFeed]=useState(null),[error,setError]=useState("");
  useEffect(()=>{if(!feed)return;let live=true;const timer=setInterval(()=>remote.taskReminder({op:"list"}).then(v=>{if(live)setFeed(v);},()=>{}),3000);return ()=>{live=false;clearInterval(timer);};},[!!feed,remote]);
  const run=async fn=>{setError("");try{await fn();}catch(e){setError(e?.message??String(e));}};
- async function open(key){await remote.taskReminder({op:"navigate",key});setFeed(null);window.dispatchEvent(new Event("dsh-bots-reminder-open"));}
- return jsxs("div",{className:"br-reminder-menu",children:[
-  jsx("button",{type:"button",className:"br-button","aria-expanded":!!feed,onClick:()=>run(async()=>setFeed(feed?null:await remote.taskReminder({op:"list"}))),children:"最近任务提醒"}),
-  feed&&jsxs("section",{className:"br-reminder-feed","aria-label":"最近任务提醒",children:[
+ async function open(key){await remote.taskReminder({op:"navigate",key});setFeed(null);onClose();window.dispatchEvent(new Event("dsh-bots-reminder-open"));}
+ return jsxs("div",{style:{marginBottom:12},children:[
+  jsx("button",{type:"button",className:"br-button","aria-expanded":!!feed,onClick:()=>run(async()=>setFeed(feed?null:await remote.taskReminder({op:"list"}))),children:"任务提醒历史和桌面提醒（本工作区）"}),
+  feed&&jsxs("section",{style:{maxHeight:220,overflowY:"auto",marginTop:8}, "aria-label":"任务提醒历史",children:[
    jsxs("div",{className:"br-reminder-head",children:[jsx("strong",{children:"最近任务提醒"}),jsx("button",{type:"button",className:"br-button","aria-label":"关闭最近任务提醒",onClick:()=>setFeed(null),children:"×"})]}),
    jsx("button",{type:"button",className:"br-button","aria-pressed":feed.quiet,onClick:()=>run(async()=>{await remote.taskReminder({op:"quiet",value:!feed.quiet});setFeed(await remote.taskReminder({op:"list"}));}),children:feed.quiet?"桌面提醒已静音 · 恢复":"静音桌面提醒"}),
    feed.events.length===0&&jsx("p",{children:"暂无任务提醒"}),
@@ -65421,6 +65945,9 @@ function ReminderHistory({remote}){
 }
 function FinalDeliveryCard({event,remote}){
  const [result,setResult]=useState(""),[busy,setBusy]=useState(false);
+ function open(file){
+  window.dispatchEvent(new CustomEvent(PREVIEW_EVENT,{detail:{roomId:event.roomId,runId:file.runId,reminderKey:event.key,fileId:file.id,file}}));
+ }
  async function act(file,action){
   if(busy)return;setBusy(true);setResult("");
   try{
@@ -65431,10 +65958,11 @@ function FinalDeliveryCard({event,remote}){
   }catch(e){setResult((e?.message??String(e))+"　记录位置："+file.path);}finally{setBusy(false);}
  }
  return jsxs("div",{className:"br-final-files",children:[
+  event.text&&jsx("p",{style:{whiteSpace:"pre-wrap"},children:event.text}),
   ...event.files.map(file=>jsxs("article",{className:"br-final-file","data-final-artifact":file.id,children:[
-   jsx("strong",{children:file.name}),jsx("small",{children:file.path}),
+   jsx("strong",{children:file.name}),jsx("button",{type:"button",className:"br-file-path",title:file.path,onClick:()=>open(file),children:file.path}),
    jsxs("div",{children:[
-    jsx("button",{type:"button",className:"br-button",disabled:busy,onClick:()=>act(file,"open"),children:"打开"}),
+    jsx("button",{type:"button",className:"br-button",disabled:busy,onClick:()=>open(file),children:"打开"}),
     jsx("button",{type:"button",className:"br-button",disabled:busy,onClick:()=>act(file,"reveal"),children:"查看所在文件夹"})
    ]})
   ]},file.id)),result&&jsx("div",{role:"status",children:result})
@@ -65450,7 +65978,7 @@ function TaskMessageMenu({room,entry,remote}){
   },children:"钉到桌面"}),problem&&jsx("span",{role:"status",children:problem})
  ]});
 }
-const REMINDER_STYLE=".br-reminder-menu{position:relative;margin-left:auto;flex:none}.br-reminder-feed{position:absolute;right:0;top:100%;z-index:8;width:min(340px,80vw);max-height:55vh;overflow:auto;background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#252525);border:1px solid var(--dsw-alias-border-l2,#bbb);border-radius:8px;padding:12px;box-shadow:0 6px 20px #0002}.br-reminder-head{display:flex;justify-content:space-between;align-items:center}.br-reminder-item{width:100%;display:grid;gap:3px;text-align:left;padding:9px 3px;background:transparent;color:inherit;border:0;border-bottom:1px solid #8883;cursor:pointer}.br-reminder-item small,.br-final-file small{opacity:.75}.br-final-file{display:grid;gap:5px;margin:5px 0;padding:10px;border:1px solid var(--dsw-alias-border-l2,#bbb);border-radius:7px}.br-final-file small{overflow-wrap:anywhere}.br-final-file button+button{margin-left:6px}.br-row[data-reminder-target]{outline:2px solid var(--dsw-alias-state-info-primary,#4381de);outline-offset:-2px;border-radius:6px}.br-task-menu{display:inline-block;position:relative;margin-left:8px}.br-task-menu summary{cursor:pointer;list-style:none}.br-task-menu[open]{z-index:3}.br-history{overscroll-behavior:contain}";
+const REMINDER_STYLE=".br-file-path{font:inherit;font-size:.85em;color:inherit;text-align:left;overflow-wrap:anywhere;text-decoration:underline;background:transparent;border:0;padding:0;cursor:pointer}.br-reminder-menu{position:relative;margin-left:auto;flex:none}.br-reminder-feed{position:absolute;right:0;top:100%;z-index:8;width:min(340px,80vw);max-height:55vh;overflow:auto;background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#252525);border:1px solid var(--dsw-alias-border-l2,#bbb);border-radius:8px;padding:12px;box-shadow:0 6px 20px #0002}.br-reminder-head{display:flex;justify-content:space-between;align-items:center}.br-reminder-item{width:100%;display:grid;gap:3px;text-align:left;padding:9px 3px;background:transparent;color:inherit;border:0;border-bottom:1px solid #8883;cursor:pointer}.br-reminder-item small,.br-final-file small{opacity:.75}.br-final-file{display:grid;gap:5px;margin:5px 0;padding:10px;border:1px solid var(--dsw-alias-border-l2,#bbb);border-radius:7px}.br-final-file small{overflow-wrap:anywhere}.br-final-file button+button{margin-left:6px}.br-row[data-reminder-target]{outline:2px solid var(--dsw-alias-state-info-primary,#4381de);outline-offset:-2px;border-radius:6px}.br-task-menu{display:inline-block;position:relative;margin-left:8px}.br-task-menu summary{cursor:pointer;list-style:none}.br-task-menu[open]{z-index:3}.br-history{overscroll-behavior:contain}";
 
 function GroupChatView({room,bots,runs,entries,remote,onReload,listControl,onLoadEarlier,loadingEarlier,hasEarlier,
  composer,onReply,error,pendingApproval,onApprove,onReject,question,onAnswerQuestion,onSkipQuestion}){
@@ -65459,8 +65987,66 @@ function GroupChatView({room,bots,runs,entries,remote,onReload,listControl,onLoa
  const workSlots=useRef(new Map());
  const route=useReminderRoute();
  const activeRoute=route?.event?.roomId===room.id?route:null;
- const displayEntries=activeRoute?mergeLedgerEntries(entries,activeRoute.rows):entries;
+ const [boardTarget,setBoardTarget]=useState(null);
+ const [boardHighlight,setBoardHighlight]=useState(null);
+ const locateRef=useRef(null);
+ useEffect(()=>()=>{locateRef.current?.reject?.(Error("群已切换"));locateRef.current=null;},[room.id]);
+ async function locateBoardMessage(card){
+  const request={roomId:room.id,messageId:card.messageId,key:card.key,rows:[]};
+  if(locateRef.current) throw Error("正在定位");
+  locateRef.current=request;
+  try{
+   if(card.key){
+    const target=await remote.taskReminder({op:"target",key:card.key});
+    if(target.event.roomId!==room.id||target.event.messageId!==card.messageId)throw Error("未找到该群原消息");
+    request.rows=target.rows;
+   }else if(!entries.some(row=>(row.messageId??row.id)===card.messageId)){
+    const message=(await remote.listMessages(room.id)).find(row=>row.id===card.messageId&&row.roomId===room.id);
+    if(!message)throw Error("未找到原消息");
+    request.rows=[{type:message.sender.kind==="user"?"user":"bot-text",id:message.id,messageId:message.id,roomId:room.id,
+     at:message.createdAt,sequence:message.sequence,text:message.text,senderName:message.sender.name,botId:message.sender.botId,
+     runId:message.runId,replyTo:message.replyTo,attachments:message.attachments}];
+   }
+   if(locateRef.current!==request)throw Error("群已切换");
+   await new Promise((resolve,reject)=>{request.resolve=resolve;request.reject=reject;setBoardTarget(request);});
+  }finally{if(locateRef.current===request)locateRef.current=null;}
+ }
+ const routeEntries=activeRoute?mergeLedgerEntries(entries,activeRoute.rows):entries;
+ const loadedEntries=boardTarget?.roomId===room.id&&boardTarget.rows.length?mergeLedgerEntries(routeEntries,boardTarget.rows):routeEntries;
+ useLayoutEffect(()=>{
+  if(!boardTarget||boardTarget.roomId!==room.id||locateRef.current!==boardTarget)return;
+  const node=[...contentRef.current.querySelectorAll("[data-message-id]")].find(el=>el.dataset.messageId===boardTarget.messageId);
+  if(!node){boardTarget.reject(Error("未找到原消息"));return;}
+  following.current=false;
+  setBoardHighlight({roomId:room.id,messageId:boardTarget.messageId});
+  boardTarget.resolve();
+  requestAnimationFrame(()=>{
+   if(!node.isConnected)return;
+   node.focus({preventScroll:true});node.scrollIntoView({block:"center",behavior:"instant"});
+   if(boardTarget.key)void remote.taskReminder({op:"handled",key:boardTarget.key}).catch(()=>{});
+  });
+ },[boardTarget,room.id,remote]);
+ const originIds=new Set(loadedEntries.filter(e=>e.type==="user").map(e=>e.messageId??e.id));
+ const savedOrigins=(room.taskReminders??[]).flatMap(e=>{
+  const origin=e.originEntry;
+  if(!origin || origin.roomId!==room.id || originIds.has(origin.messageId))return [];
+  originIds.add(origin.messageId);
+  return [origin];
+ });
+ const displayEntries=savedOrigins.length?mergeLedgerEntries(loadedEntries,savedOrigins):loadedEntries;
  const rows=groupReplyRows(displayEntries,runs,workSlots.current);
+ const [quoteTarget,setQuoteTarget]=useState(null), [quoteError,setQuoteError]=useState("");
+ const requestedPage=useRef(null);
+ useLayoutEffect(()=>{
+  if(!quoteTarget || quoteTarget.roomId!==room.id)return;
+  const node=Array.from(contentRef.current?.querySelectorAll("[data-message-id]")??[]).find(el=>el.dataset.messageId===quoteTarget.id);
+  if(node){following.current=false;node.focus({preventScroll:true});node.scrollIntoView({block:"center",behavior:"instant"});setQuoteTarget(null);return;}
+  if(loadingEarlier)return;
+  const first=rows[0]?.id;
+  if(hasEarlier && onLoadEarlier && requestedPage.current!==first){requestedPage.current=first;Promise.resolve(onLoadEarlier()).catch(()=>{setQuoteError("未能载入此前的消息");setQuoteTarget(null);});}
+  else if(!hasEarlier){setQuoteError("未找到对应的原消息");setQuoteTarget(null);}
+ },[quoteTarget,room.id,rows[0]?.id,rows.length,hasEarlier,loadingEarlier,onLoadEarlier]);
+ const jumpQuote=id=>{following.current=false;requestedPage.current=null;setQuoteError("");setQuoteTarget({roomId:room.id,id});};
  const seenRoute=useRef(null);
  useLayoutEffect(()=>{
   if(!activeRoute||seenRoute.current===activeRoute.id)return;
@@ -65468,7 +66054,7 @@ function GroupChatView({room,bots,runs,entries,remote,onReload,listControl,onLoa
   if(!node)return;
   following.current=false;const timer=requestAnimationFrame(()=>{
    if(!node.isConnected||currentReminderRoute?.id!==activeRoute.id)return;
-   node.scrollIntoView({block:"center",behavior:"instant"});
+   node.focus({preventScroll:true});node.scrollIntoView({block:"center",behavior:"instant"});
    remote.taskReminder({op:"handled",key:activeRoute.event.key,routeId:activeRoute.id}).then(()=>{seenRoute.current=activeRoute.id;activeRoute.located=true;},()=>{});
   });return ()=>cancelAnimationFrame(timer);
  },[activeRoute,room.id,displayEntries.length,remote]);
@@ -65494,24 +66080,28 @@ function GroupChatView({room,bots,runs,entries,remote,onReload,listControl,onLoa
   const ownsFile=(row,file)=>row.type==="bot-text"&&row.runId===file.runId&&row.botId===file.botId&&(!file.replyMessageId||file.replyMessageId===(row.messageId??row.id));
   const historical=fileRows.filter(file=>!rows.some(row=>ownsFile(row,file))&&!rows.some(row=>row.type==="work"&&row.runId===file.runId))
     .filter(file=>!hasEarlier||!rows.length||Date.parse(file.at)>=Date.parse(rows[0].at));
-  const timeline=rows.slice();
+  const groupedTasks=new Set((room.mentionSequences??[]).filter(task=>task.taskCard&&rows.some(row=>row.messageId===task.taskCard.origin)).map(task=>task.id));
+  const groupedRuns=new Set(runs.filter(run=>groupedTasks.has(run.teamTaskId)).map(run=>run.id));
+  const deliveredRuns=new Set((room.taskReminders??[]).filter(e=>e.kind==="done"&&e.effective!==false).flatMap(e=>(e.files??[]).map(f=>f.runId).filter(Boolean)));
+  const timeline=[...rows];
   for(const file of historical){
+    if(groupedRuns.has(file.runId)&&deliveredRuns.has(file.runId))continue;
     const index=timeline.findIndex(row=>Date.parse(row.at)>Date.parse(file.at));
     timeline.splice(index<0?timeline.length:index,0,{...file,type:"history-file"});
   }
  const approvals=entries.filter(entry=>entry.type==="approval"&&entry.outcome===undefined);
  const specials=new Set();
  return jsxs("section",{className:"ac-group-chat br-window","data-ac-conversation":"","data-bots-chat-build":GROUP_CHAT_BUILD,children:[
-  jsx("style",{children:GROUP_CHAT_CSS+REMINDER_STYLE}),
+  jsx("style",{children:GROUP_CHAT_CSS+REMINDER_STYLE+REMINDER_BOARD_STYLE}),
   jsxs("header",{className:"br-top",children:[
    listControl&&cloneElement(listControl,{className:"br-list-toggle",children:jsx("svg",{width:18,height:18,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.5,"aria-hidden":true,children:jsx("path",{d:"M4 5h16v14H4zM9 5v14"})})}),
    jsx("div",{className:"br-group-avatar","aria-hidden":true,children:
     [...bots.slice(0,3).map(bot=>jsx("span",{"data-actor":groupActor(bot),children:groupName(bot).slice(0,1)},bot.id)),
      jsx("span",{"data-actor":"me",children:"我"},"me")]}),
    jsxs("div",{className:"br-heading",children:[
-    jsx("h1",{children:room.name||"群聊"}),
+    jsx("h1",{title:room.name||"群聊",children:room.name||"群聊"}),
     jsx("p",{className:"br-roster",children:bots.map(groupName).join("、")+" 和你"})
-   ]}),jsx(ReminderHistory,{remote})
+   ]}),jsx(ReminderBoard,{room,bots,runs,entries:displayEntries,remote,onLocate:locateBoardMessage},room.id)
   ]}),
   jsxs("div",{className:"br-history","data-ac-transcript":"","data-ac-transcript-scroll":"",ref:containerRef,children:[
    jsxs("ol",{className:"br-log","data-ac-transcript-content":"",ref:contentRef,children:[
@@ -65524,21 +66114,22 @@ function GroupChatView({room,bots,runs,entries,remote,onReload,listControl,onLoa
       const user=entry.type==="user",bot=nameOf(entry.botId),actor=user?"me":groupActor(bot??{name:entry.senderName});
      const work=entry.type==="work";
      const messageId=entry.messageId??entry.id;
-     const final=(room.taskReminders??[]).find(e=>e.kind!=="waiting"&&e.messageId===messageId)??(activeRoute?.event.messageId===messageId&&activeRoute.event.kind!=="waiting"?activeRoute.event:null);
+     const final=(room.taskReminders??[]).find(e=>e.kind!=="waiting"&&e.effective!==false&&e.messageId===messageId)??(activeRoute?.event.messageId===messageId&&activeRoute.event.kind!=="waiting"?activeRoute.event:null);
      const member=work && room.teamMemberReceipts?.find(row=>row.messageId===entry.run.originMessageId)
        ?.members.find(row=>row.dispatchId===entry.runId);
-     const assets=entry.type==="bot-text"&&entry.runId?fileRows.filter(row=>ownsFile(entry,row)&&!specials.has(row.id)):[];
-     if (!assets.length && entry.type==="bot-text" && entry.runId && entry.deliverables?.length) {
+     const hidePublishedFiles=groupedRuns.has(entry.runId)&&deliveredRuns.has(entry.runId);
+     const assets=!hidePublishedFiles&&entry.type==="bot-text"&&entry.runId?fileRows.filter(row=>ownsFile(entry,row)&&!specials.has(row.id)):[];
+     if (!hidePublishedFiles && !assets.length && entry.type==="bot-text" && entry.runId && entry.deliverables?.length) {
       const id="run:"+entry.runId+":deliverable";
       if(!specials.has(id))assets.push({id,runId:entry.runId,files:entry.deliverables});
      }
      assets.forEach(row=>specials.add(row.id));
-     return jsxs("li",{className:"br-row","data-reminder-target":activeRoute?.event.messageId===messageId?"":undefined,"data-actor":actor,"data-message-id":messageId,"data-reply-run":entry.runId,children:[
+     return jsxs("li",{className:"br-row","data-reminder-target":activeRoute?.event.messageId===messageId?"":undefined,"data-board-target":boardHighlight?.roomId===room.id&&boardHighlight.messageId===messageId?"":undefined,"data-actor":actor,tabIndex:-1,"data-message-id":messageId,"data-reply-run":entry.runId,children:[
       jsx("div",{className:"br-avatar","aria-hidden":true,children:user?"我":avatarNode(bot,groupName(bot??{name:entry.senderName}).slice(0,1))}),
       jsxs("div",{className:"br-msg",children:[
        jsxs("div",{className:"br-by",children:[jsx("span",{children:user?"你":bot?.name||entry.senderName||"成员"}),
         jsx("time",{dateTime:entry.at,children:timeOf(entry.at)})]}),
-       entry.replyTo&&jsx("div",{className:"br-fine",children:"回复 "+(rows.find(row=>row.messageId===entry.replyTo)?.text??"前面的消息").slice(0,80)}),
+       entry.replyTo&&jsx("button",{type:"button",className:"br-button br-fine","data-quote-target":entry.replyTo,onClick:()=>jumpQuote(entry.replyTo),children:"回复 "+(entry.replyPreview??rows.find(row=>row.messageId===entry.replyTo)?.text??"查看原消息").slice(0,80)}),quoteError&&entry.replyTo&&jsx("small",{role:"status",children:quoteError}),
        user?jsxs("div",{className:"br-bubble",children:[jsx("span",{children:entry.text}),
         jsx(AttachmentRows,{attachments:entry.attachments,hasText:!!entry.text})]}):
         work?jsx(GroupWorkReply,{run:entry.run,room,name:groupName(bot),remote,onReload,member}):
@@ -65723,7 +66314,7 @@ function ConversationArea({ listControl, room, roomId, bots, runs, modelGroups, 
 				let sent;
 				try{sent=await remote.sendMessage(input);}
 				catch(error){
-					if(room.directBotId!==void 0||!/network|transport|timeout|connection.*closed|websocket.*closed/iu.test(String(error)))throw error;
+					if(room.directBotId!==void 0||!/network|transport|timeout|EPERM|EBUSY|connection.*closed|websocket.*closed/iu.test(String(error)))throw error;
 					sent=await remote.sendMessage(input);
 				}
 				onMarkRead(roomId, {
@@ -66525,7 +67116,8 @@ function BotFormDialog({ isBotMode, editingBot, visibleBots, busy, setBusy, remo
 					setBotModel((prev) => prev !== "" ? prev : fallbackModel?.id ?? "");
 					const published = fallbackModel?.reasoning?.efforts ?? [];
 					const publishedDefault = fallbackModel?.reasoning?.defaultEffort;
-					if (publishedDefault !== void 0 && published.some((e) => e.id === publishedDefault)) setBotEffort(publishedDefault);
+					if(fallbackGroup?.id==="codex-cli")setBotEffort("");
+					else if (publishedDefault !== void 0 && published.some((e) => e.id === publishedDefault)) setBotEffort(publishedDefault);
 					else if (published.length > 0) setBotEffort(published[0].id);
 					else setBotEffort("");
 				} else if (editingBot.provider !== void 0 && editingBot.model !== void 0) {
@@ -66533,7 +67125,7 @@ function BotFormDialog({ isBotMode, editingBot, visibleBots, busy, setBusy, remo
 					if (entry !== void 0) {
 						const published = entry.reasoning?.efforts ?? [];
 						const fallback = entry.reasoning?.defaultEffort ?? "";
-						setBotEffort((prev) => alignEffortId(published, fallback, prev));
+						setBotEffort((prev) => editingBot.provider==="codex-cli"?(published.some(e=>e.id===prev)?prev:""):alignEffortId(published, fallback, prev));
 					}
 				}
 				setModelError(void 0);
@@ -66630,6 +67222,7 @@ function BotFormDialog({ isBotMode, editingBot, visibleBots, busy, setBusy, remo
 	* first published one — never keep a level the model does not offer.
 	*/
 	function alignEffort(provider, model, previous) {
+		if(provider==="codex-cli")return effortsFor(provider,model).options.some(e=>e.id===previous)?previous:"";
 		const { options, fallback } = effortsFor(provider, model);
 		return alignEffortId(options, fallback, previous);
 	}
@@ -67101,7 +67694,12 @@ function BotFormDialog({ isBotMode, editingBot, visibleBots, busy, setBusy, remo
 											children: "不选则用该 CLI 的默认模型；对话里说「换成 …」只影响当前会话"
 										})
 									]
-								})] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+								}),botProvider==="codex-cli"&&jsxs("label",{className:css.field,children:[
+                  jsx("span",{className:css.fieldLabel,children:"推理强度"}),
+                  jsxs("select",{className:css.select,value:botEffort,onChange:e=>setBotEffort(e.target.value),children:[
+                    jsx("option",{value:"",children:"跟随本机"}),
+                    ...effortsFor(botProvider,botModel).options.map(level=>jsx("option",{value:level.id,children:level.name},level.id))]})
+                ]})] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
 									/* @__PURE__ */ jsxs("div", {
 										className: css.field,
 										children: [
@@ -67902,26 +68500,312 @@ const EXPORT_BUTTONS = [
 function TeamWorkflowSettings({room,bots,remote,onSaved,busy,setBusy,leaderBotId}) {
  const [first,setFirst]=useState(room.teamWorkflow?.firstBotId??room.teamWorkflow?.memberIds?.[0]??"");
  const [reviewer,setReviewer]=useState(room.teamWorkflow?.reviewerId??"");
+ const [selectedDeliverer,setDeliverer]=useState(room.teamWorkflow?.delivererId??"");
+ const deliverer=[first,reviewer].includes(selectedDeliverer)?selectedDeliverer:"";
  const [notice,setNotice]=useState("");
  const members=bots.filter(b=>room.memberIds.includes(b.id));
  async function save(){
   if(busy)return;
   if(!first||!reviewer||first===reviewer){setNotice("请选择两位不同成员分别首做和复核。");return;}
   setBusy(true);setNotice("");
-  try{const saved=await remote.updateRoom({id:room.id,leaderBotId:leaderBotId||null,teamWorkflow:{mode:"until-final-review",firstBotId:first,reviewerId:reviewer,memberIds:[first,reviewer],...(leaderBotId?{supervisorId:leaderBotId}:{})}});
-   if(saved?.teamWorkflow?.firstBotId!==first||saved?.teamWorkflow?.reviewerId!==reviewer)throw Error("宿主未回读相同分工，请重新检查。");
+  try{const saved=await remote.updateRoom({id:room.id,leaderBotId:leaderBotId||null,teamWorkflow:{mode:"until-final-review",firstBotId:first,reviewerId:reviewer,memberIds:[first,reviewer],delivererId:deliverer||null,...(leaderBotId?{supervisorId:leaderBotId}:{})}});
+   if(saved?.teamWorkflow?.firstBotId!==first||saved?.teamWorkflow?.reviewerId!==reviewer || (saved.teamWorkflow.delivererId??"")!==deliverer)throw Error("宿主未回读相同分工，请重新检查。");
    setNotice("队长与接力分工已保存");onSaved?.();
   }catch(e){setNotice(describe$1(e));}finally{setBusy(false);}
  }
  const select=(label,value,set)=>jsxs("label",{style:{display:"flex",gap:8,alignItems:"center"},children:[label,jsxs("select",{"aria-label":label,value,disabled:busy,onChange:e=>set(e.target.value),style:{...roomNumberInputStyle,width:240},children:[jsx("option",{value:"",children:"请选择成员"}),...members.map(b=>jsx("option",{value:b.id,children:b.name},b.id))]})]});
- return jsxs("section",{"data-team-workflow":"",style:{display:"grid",gap:10,padding:"12px 0"},children:[jsx("strong",{children:"接力分工"}),select("首做成员",first,setFirst),select("复核成员",reviewer,setReviewer),jsx("span",{style:mutedLineStyle,children:"@所有人按分工接力；只点名一位只启动本人。双方确认同一版本后，含文件的成果由终审成员交稿。队长不能代签。"}),jsx(Button,{type:"button",disabled:busy,onClick:save,children:"保存队长与分工"}),notice&&jsx("span",{role:"status",children:notice})]});
+ return jsxs("section",{"data-team-workflow":"",style:{display:"grid",gap:10,padding:"12px 0"},children:[jsx("strong",{children:"接力分工"}),select("首做成员",first,setFirst),select("复核成员",reviewer,setReviewer),jsxs("label",{style:{display:"flex",gap:8,alignItems:"center"},children:["最终交付人",jsxs("select",{"aria-label":"最终交付人",value:deliverer,disabled:busy,onChange:e=>setDeliverer(e.target.value),style:{...roomNumberInputStyle,width:240},children:[jsx("option",{value:"",children:"跟随复核成员"}),...members.filter(b=>b.id===first||b.id===reviewer).map(b=>jsx("option",{value:b.id,children:b.name},b.id))]})]}),jsx("span",{style:mutedLineStyle,children:"双方确认同一版本后，由本群选定的最终交付人在原消息下交稿。"}),jsx(Button,{type:"button",disabled:busy,onClick:save,children:"保存队长与分工"}),notice&&jsx("span",{role:"status",children:notice})]});
 }
 function taskStatusLabel(status){return {pending:"待派发","pending-selection":"请选择原任务","pending-delivery":"待交稿",succeeded:"已结算",cancelled:"已取消",delivered:"已投递",running:"执行中",verifying:"核对运行状态","pending-review":"待审核",stopping:"正在停止",completed:"已完成",stopped:"已停止",waiting:"待处理",failed:"处理失败"}[status]??"状态待确认";}
 function taskFriendlyError(error){const raw=error instanceof Error?error.message:String(error??"");if(/timeout|timed out|超时/i.test(raw))return "请求超时，请稍后重试。";if(/unavailable|不可用|not found|不存在/i.test(raw))return "当前服务不可用，请检查后重试。";if(/permission|权限|forbidden|denied/i.test(raw))return "没有继续该任务的权限，请联系群管理员。";return "未能继续原任务，请重试或重新选择任务。";}
 function taskMainText(value,fallback=""){const text=String(value??"");if(/TypeError|ReferenceError|is not a function|remote\.|TEAM_[A-Z_]+/i.test(text))return taskFriendlyError(text);return text.replace(/(?:thread:|task:|run:)?[a-f0-9]{8}-[a-f0-9-]{27,}/ig,"").replace(/\(\s*\)|（\s*）/g,"").trim()||fallback;}
 function taskNoticeView(entry){const raw=String(entry.rawDiagnostic??entry.text??"");const failure=entry.taskFailure===true||entry.type==="error"||/失败|待核对|停止未确认|不可用|缺少|缺失|无法|异常|错误|超时|被拒|TypeError|ReferenceError|is not a function/i.test(raw);const routine=!failure&&(entry.taskRoutine===true||/待接棒|已接棒|接单|派单|派发|交接|审核|复核|保存|已设置|更新.*设置|分工|已入队|开始接力|接力.*完成|成员.*加入|成员.*移除/.test(raw));return{failure,routine,text:failure?(entry.displayText??taskFriendlyError(raw)):taskMainText(entry.displayText??raw,"任务过程已记录")};}
 function legacyTaskDockVisible(isGroup){return !isGroup;}
-function RoomSettingsDialog({ room, defaultAdmission = "legacy", bots, busy, setBusy, remote, onClose, onSaved }) {
+const WORKSTUDIO_ROOM_SETTINGS_CSS = "\n    .ws-settings {\n      --ws-text: light-dark(#172e2a, #e9f2ee);\n      --ws-muted: light-dark(#5c706a, #b2c4bd);\n      --ws-page: light-dark(#eff5f1, #17241f);\n      --ws-panel: light-dark(#fff, #1e2e29);\n      --ws-soft: light-dark(#f6f9f7, #243731);\n      --ws-border: light-dark(#dce7e0, #3b5249);\n      --ws-accent: light-dark(#145c50, #acf0d6);\n      --ws-tint: light-dark(#e7f3ec, #2c483d);\n      --ws-primary: light-dark(#14594e, #a5e4ce);\n      --ws-on-primary: light-dark(#fff, #12322a);\n      --ws-warn: light-dark(#8b531a, #efc69a);\n      --ws-error: light-dark(#a23839, #ffb4b3);\n      --ws-shadow: light-dark(#263f3421, #0005);\n      padding: 10px 0;\n      color: var(--ws-text);\n      font: 14px/1.5 'Segoe UI', 'Microsoft YaHei UI', sans-serif;\n    }\n    .ws-settings *, .ws-settings *::before { box-sizing: border-box; }\n    .ws-settings [hidden] { display: none !important; }\n    .ws-settings h1, .ws-settings h2, .ws-settings p { margin: 0; }\n    .ws-settings button, .ws-settings input, .ws-settings select { font: inherit; color: inherit; }\n    .ws-settings :focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 3px; }\n    .ws-settings .stage { max-width: 930px; margin: auto; border: 1px solid var(--ws-border); border-radius: 18px; background: var(--ws-page); }\n    .ws-settings .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 17px; border-bottom: 1px solid var(--ws-border); border-radius: 18px 18px 0 0; background: var(--ws-panel); position: relative; z-index: 3; }\n    .ws-settings .brand, .ws-settings .team-title { display: flex; align-items: center; gap: 9px; font-weight: 650; }\n    .ws-settings .brand-grid { display: grid; grid-template-columns: repeat(2,4px); grid-template-rows: repeat(2,4px); gap: 2px; padding: 7px; border-radius: 7px; background: var(--ws-primary); }\n    .ws-settings .brand-grid i { border: 1px solid var(--ws-on-primary); border-radius: 1px; }\n    .ws-settings .toolbar-actions, .ws-settings .footer-actions { display: flex; gap: 8px; align-items: center; }\n    .ws-settings .stage-content { padding: 20px; }\n    .ws-settings .settings { border: 1px solid var(--ws-border); border-radius: 16px; background: var(--ws-panel); box-shadow: 0 10px 30px var(--ws-shadow); overflow: clip; }\n    .ws-settings .dialog-head { display: flex; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--ws-border); }\n    .ws-settings h1 { font-size: 21px; font-weight: 700; letter-spacing: .015em; }\n    .ws-settings h2 { font-size: 18px; font-weight: 690; }\n    .ws-settings .muted { color: var(--ws-muted); font-size: 12px; }\n    .ws-settings .dialog-head p { margin-top: 3px; }\n    .ws-settings .layout { display: grid; grid-template-columns: 164px minmax(0,1fr); min-height: 421px; }\n    .ws-settings .settings-nav { display: grid; align-content: start; gap: 5px; padding: 16px 12px; border-right: 1px solid var(--ws-border); background: var(--ws-soft); }\n    .ws-settings .nav-entry { display: flex; align-items: center; gap: 8px; min-height: 41px; padding: 5px 11px; border: 1px solid transparent; border-radius: 8px; background: transparent; text-align: left; white-space: nowrap; color: var(--ws-muted); }\n    .ws-settings .nav-entry:hover { color: var(--ws-accent); background: var(--ws-tint); }\n    .ws-settings .nav-entry[aria-current=\"true\"] { color: var(--ws-accent); background: var(--ws-tint); border-color: var(--ws-border); font-weight: 650; }\n    .ws-settings .nav-dot { width: 6px; height: 6px; background: var(--ws-warn); border-radius: 50%; margin-left: auto; flex: none; }\n    .ws-settings .panels { min-width: 0; padding: 20px 22px 19px; }\n    .ws-settings .section-head { margin-bottom: 17px; }\n    .ws-settings .section-head p { margin-top: 4px; }\n    .ws-settings .field { display: grid; gap: 5px; min-width: 0; }\n    .ws-settings .field > span, .ws-settings .line-label { font-weight: 630; }\n    .ws-settings input:not([type=\"checkbox\"]), .ws-settings select { width: 100%; min-width: 0; min-height: 39px; padding: 7px 10px; border: 1px solid var(--ws-border); border-radius: 8px; background: var(--ws-panel); }\n    .ws-settings input:disabled, .ws-settings select:disabled { color: var(--ws-muted); background: var(--ws-soft); }\n    .ws-settings input::placeholder { color: var(--ws-muted); }\n    .ws-settings button { cursor: pointer; }\n    .ws-settings button:disabled { cursor: default; }\n    .ws-settings .action { display: inline-flex; justify-content: center; align-items: center; gap: 6px; min-height: 38px; padding: 6px 12px; border: 1px solid var(--ws-border); border-radius: 8px; background: var(--ws-panel); white-space: nowrap; font-weight: 620; }\n    .ws-settings .action:hover:not(:disabled) { background: var(--ws-soft); border-color: var(--ws-accent); }\n    .ws-settings .action.tint { background: var(--ws-tint); color: var(--ws-accent); }\n    .ws-settings .action.main { color: var(--ws-on-primary); background: var(--ws-primary); border-color: var(--ws-primary); padding-inline: 17px; }\n    .ws-settings .action.main:hover:not(:disabled) { filter: brightness(1.12); background: var(--ws-primary); border-color: var(--ws-primary); }\n    .ws-settings .action.small { min-height: 33px; font-size: 12px; padding: 4px 9px; }\n    .ws-settings .action.square { width: 36px; height: 36px; min-height: 36px; padding: 0; font-size: 20px; color: var(--ws-muted); }\n    .ws-settings .checkrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; }\n    .ws-settings .checkrow > span, .ws-settings .state-note > div { min-width: 0; }\n    .ws-settings .checkrow small, .ws-settings .state-note small { display: block; margin-top: 3px; }\n    .ws-settings .toggle { appearance: none; width: 39px; height: 22px; margin: 0; flex: none; border: 1px solid var(--ws-border); border-radius: 12px; background: var(--ws-border); position: relative; cursor: pointer; }\n    .ws-settings .toggle::before { content: ''; position: absolute; width: 16px; height: 16px; top: 2px; left: 2px; border-radius: 50%; background: var(--ws-panel); box-shadow: 0 1px 3px var(--ws-shadow); }\n    .ws-settings .toggle:checked { background: var(--ws-primary); border-color: var(--ws-primary); }\n    .ws-settings .toggle:checked::before { left: 19px; }\n    .ws-settings .setting-block, .ws-settings .member-block { display: grid; gap: 12px; padding: 13px; border: 1px solid var(--ws-border); border-radius: 10px; background: var(--ws-panel); }\n    .ws-settings .setting-block { background: var(--ws-soft); }\n    .ws-settings .state-note, .ws-settings .member-head { display: flex; align-items: center; justify-content: space-between; gap: 9px; }\n    .ws-settings .state-badge { display: inline-flex; flex: none; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 650; color: var(--ws-accent); background: var(--ws-tint); }\n    .ws-settings .members { display: grid; gap: 0; }\n    .ws-settings .member { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--ws-border); }\n    .ws-settings .avatar { display: grid; place-items: center; border-radius: 7px; width: 30px; height: 30px; color: var(--ws-accent); background: var(--ws-tint); font-weight: 630; }\n    .ws-settings .add-member { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; }\n    .ws-settings .stack { display: grid; gap: 13px; }\n    .ws-settings .fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; gap: 12px; }\n    .ws-settings .details { border: 1px solid var(--ws-border); border-radius: 9px; margin-top: 12px; }\n    .ws-settings .details summary { padding: 9px 11px; color: var(--ws-muted); cursor: pointer; font-size: 12px; }\n    .ws-settings .details-body { display: grid; gap: 9px; padding: 0 11px 11px; }\n    .ws-settings .section-actions { display: flex; justify-content: flex-end; margin-top: 13px; }\n    .ws-settings .dialog-footer { display: flex; align-items: center; justify-content: flex-end; border-top: 1px solid var(--ws-border); padding: 13px 17px; background: var(--ws-soft); }\n    .ws-settings .sr-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }\n\n\n    .ws-settings .error { color: var(--ws-error); font-size: 12px; padding: 6px 0 0; }\n    .ws-settings .discard { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 9px; margin: 0 17px 11px; padding: 10px; border: 1px solid var(--ws-border); border-radius: 8px; color: var(--ws-warn); }\n    .ws-settings .room-view { padding: 24px 16px; min-height: 180px; }\n    .ws-settings .room-view .action { margin-top: 13px; }\n    .ws-settings .room-view p { margin-top: 7px; }\n    .ws-settings .reminders { position: absolute; right: 17px; top: calc(100% + 5px); width: min(330px, calc(100% - 34px)); padding: 13px; border-radius: 11px; border: 1px solid var(--ws-border); background: var(--ws-panel); box-shadow: 0 10px 25px var(--ws-shadow); }\n    .ws-settings .reminders .details-body p { padding: 5px 0; border-bottom: 1px solid var(--ws-border); }\n    @container (max-width: 585px) {\n      .ws-settings .stage-content { padding: 9px; }\n      .ws-settings .layout { grid-template-columns: 1fr; min-height: 0; }\n      .ws-settings .settings-nav { grid-template-columns: repeat(2,minmax(0,1fr)); border-right: 0; border-bottom: 1px solid var(--ws-border); padding: 8px; }\n      .ws-settings .nav-entry { justify-content: center; padding-inline: 4px; }\n      .ws-settings .nav-dot { margin-left: 1px; }\n      .ws-settings .panels, .ws-settings .dialog-head { padding: 13px; }\n      .ws-settings .dialog-footer { padding: 12px; }\n      .ws-settings .footer-actions { align-self: flex-end; }\n    }\n    @container (max-width: 390px) {\n      .ws-settings .fields { grid-template-columns: 1fr; }\n      .ws-settings .toolbar { padding-inline: 10px; }\n    }\n    .ws-settings .stage { container-type: inline-size; }\n  \n/* The settings surface sits inside the host's accessible modal. */\n.ws-settings{position:relative;container-type:inline-size;color-scheme:light dark;padding:0;background:var(--ws-panel)}\n.ws-settings .dialog-head{position:relative;align-items:center;z-index:2}\n.ws-settings .dialog-head:has(.reminders){z-index:5}\n.ws-settings .reminders{top:calc(100% - 3px);right:16px;max-height:50vh;overflow:auto}\n.ws-settings .reminders .action{justify-content:flex-start;white-space:normal;text-align:left}\n.dsh-preview-community-dialog:has(.ws-settings){width:min(880px,100%);padding-bottom:0}\n.dsh-preview-community-dialog:has(.ws-settings) .dsh-preview-community-dialog-header{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);padding:0}\n.dsh-preview-community-dialog:has(.ws-settings) .dsh-preview-community-dialog-header button{display:none}\n.dsh-preview-community-dialog:has(.ws-settings) .dsh-preview-community-dialog-body{margin:0;padding:0}\n.ws-settings .dialog-footer{gap:8px;justify-content:space-between}\n.ws-settings .footer-actions{margin-left:auto}\n.ws-settings .setting-block .fields{margin-top:4px}\n";
+function roomSettingsValues(room, defaultAdmission = "legacy") {
+  const flow = room.teamWorkflow;
+  const compression = room.compression;
+  return {
+    basic: { name: room.name, members: [...room.memberIds] },
+    reply: { paused: !!room.paused, admission: room.admission?.mode ?? defaultAdmission, speculation: room.speculation?.mode ?? "off" },
+    roles: { leader: room.team?.leader?.botId ?? "", first: flow?.firstBotId ?? flow?.memberIds?.[0] ?? "", reviewer: flow?.reviewerId ?? "", delivery: flow?.delivererId ?? "" },
+    compression: {
+      inherit: compression?.inherit !== false, ratio: String(compression?.thresholdRatio ?? 0.8),
+      tokens: String(compression?.tokenThreshold ?? ""), keep: String(compression?.keepLast ?? 4),
+      history: String(compression?.historyMessages ?? "")
+    }
+  };
+}
+
+function roomSettingsRevision(room) {
+  return JSON.stringify([roomSettingsValues(room), room.speculation?.dailyLimit ?? null, room.revokedMemberIds ?? []]);
+}
+
+const settingsSections = {
+  basic:"基本信息", reply:"回复与授权", roles:"接力分工", compression:"上下文压缩"
+};
+const sameSetting = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+
+function WorkstudioRoomSettings({room,defaultAdmission,bots,remote,onClose,onSaved,busy,setBusy,onChanged}) {
+  const [saved,setSaved] = useState(() => roomSettingsValues(room,defaultAdmission));
+  const [draft,setDraft] = useState(() => roomSettingsValues(room,defaultAdmission));
+  const [tab,setTab] = useState("basic");
+  const [candidate,setCandidate] = useState("");
+  const [adding,setAdding] = useState(false);
+  const [discard,setDiscard] = useState(null);
+  const [more,setMore] = useState(false);
+  const [actual,setActual] = useState(room);
+  const [problem,setProblem] = useState("");
+  const [notice,setNotice] = useState("");
+  const [reminders,setReminders] = useState(false);
+  const [feed,setFeed] = useState(null);
+  const [reminderBusy,setReminderBusy] = useState(false);
+  const [reminderError,setReminderError] = useState("");
+  const saving = useRef(false);
+  const dirty = Object.keys(settingsSections).filter(key=>!sameSetting(saved[key],draft[key]));
+  const set = (section,key,value) => {
+    if(saving.current) return;
+    setProblem("");
+    setNotice("");
+    setDraft(current=>({...current,[section]:{...current[section],[key]:value}}));
+  };
+  const action = (text,onClick,style="",props={}) => jsx("button",{
+    type:"button",className:"action "+style,onClick,...props,children:text
+  });
+  const help = text => jsx("small",{className:"muted",children:text});
+  const field = (label,input,hint) => jsxs("label",{className:"field",children:[jsx("span",{children:label}),input,hint&&help(hint)]});
+  const select = (section,key,options) => jsx("select",{
+    value:draft[section][key],disabled:busy,onChange:e=>set(section,key,e.target.value),
+    children:options.map(([value,label])=>jsx("option",{value,children:label},value))
+  });
+  const toggle = (section,key,label,hint) => jsxs("label",{className:"checkrow",children:[
+    jsxs("span",{children:[jsx("span",{className:"line-label",children:label}),help(hint)]}),
+    jsx("input",{type:"checkbox",role:"switch",className:"toggle","aria-label":label,checked:draft[section][key],
+      disabled:busy,onChange:e=>set(section,key,e.target.checked)})
+  ]});
+  const number = (key,options={}) => jsx("input",{type:"number",step:1,...options,value:draft.compression[key],
+    disabled:busy||(["ratio","tokens"].includes(key)&&draft.compression.inherit),onChange:e=>set("compression",key,e.target.value)});
+  const nameOf = id => bots.find(bot=>bot.id===id)?.name ?? id;
+  const memberChoices = draft.basic.members.map(id=>[id,nameOf(id)]);
+  const available = bots.filter(bot=>!draft.basic.members.includes(bot.id));
+  const roleSelect = (key,empty,choices=memberChoices) => {
+    const value=draft.roles[key];
+    const options=value&&!choices.some(([id])=>id===value)?[...choices,[value,nameOf(value)+"（请重新选择）"]]:choices;
+    return select("roles",key,[["",empty],...options]);
+  };
+  const askClose = (destination="close") => {
+    if(saving.current) return;
+    if(dirty.length) setDiscard(destination);
+    else if(destination==="more")setMore(true);
+    else onClose();
+  };
+  const doDiscard = () => {
+    if(discard==="more") {
+      setDraft(saved);setProblem("");setNotice("");setMore(true);setDiscard(null);
+    } else onClose();
+  };
+  async function reminder(action,params={}) {
+    if(reminderBusy)return;
+    setReminderBusy(true);setReminderError("");
+    try {
+      if(action==="navigate"){
+        await remote.taskReminder({op:action,...params});
+        onClose();
+        window.dispatchEvent(new Event("dsh-bots-reminder-open"));
+        return;
+      }
+      if(action==="quiet")await remote.taskReminder({op:action,...params});
+      setFeed(await remote.taskReminder({op:"list"}));
+    } catch(error){setReminderError(describe$1(error))}
+    finally{setReminderBusy(false)}
+  }
+  async function save(section) {
+    if(saving.current||busy)return;
+    const groups=section?dirty.filter(key=>key===section):dirty;
+    if(!groups.length){if(!section)onSaved();return}
+    saving.current=true;setBusy(true);setProblem("");setNotice("");
+    let focus=groups[0];
+    try {
+      const rooms=await remote.listRooms();
+      const roomNow=rooms.find(row=>row.id===room.id);
+      if(!roomNow)throw Error("群聊已不存在，请关闭设置后刷新。");
+      const latest=roomSettingsValues(roomNow,defaultAdmission), merged={};
+      const conflicts=[];
+      for(const key of Object.keys(settingsSections)){
+        merged[key]={...latest[key]};
+        for(const item of Object.keys(saved[key])){
+          if(sameSetting(draft[key][item],saved[key][item]))continue;
+          merged[key][item]=draft[key][item];
+          if(groups.includes(key)&&!sameSetting(latest[key][item],saved[key][item])&&!sameSetting(latest[key][item],draft[key][item]))conflicts.push(key);
+        }
+      }
+      setSaved(latest);setActual(roomNow);setDraft(merged);
+      if(conflicts.length){
+        focus=conflicts[0];
+        throw Error("此分区已在别处修改，已读回现有设置并保留你的输入。核对后可再次保存。");
+      }
+      const input={id:room.id,expectedSettings:roomSettingsRevision(roomNow)};
+      const submitted={};
+      const queued=(key,fields)=>{Object.assign(input,fields);submitted[key]=merged[key]};
+      const basic=groups.includes("basic");
+      const members=basic?merged.basic.members:latest.basic.members;
+      const revoked=(roomNow.revokedMemberIds??[]).filter(id=>members.includes(id));
+      const validMember=id=>members.includes(id)&&!revoked.includes(id);
+      if(basic){
+        focus="basic";
+        const name=merged.basic.name.trim();
+        if(!name||!members.length)throw Error("请填写群名，并保留至少一名成员。");
+        merged.basic.name=name;
+        queued("basic",{name,memberIds:members});
+      }
+      if(groups.includes("reply")){
+        focus="reply";
+        const {paused,admission,speculation}=merged.reply;
+        queued("reply",{paused,admission:{mode:admission},
+          speculation:{mode:speculation,...roomNow.speculation?.dailyLimit!==undefined?{dailyLimit:roomNow.speculation.dailyLimit}:{}}});
+      }
+      if(groups.includes("roles")||basic&&!sameSetting(members,latest.basic.members)&&Object.values(merged.roles).some(id=>id&&!validMember(id))){
+        focus="roles";
+        const {leader,first,reviewer,delivery}=merged.roles;
+        if([leader,first,reviewer,delivery].some(id=>id&&!validMember(id)))
+          throw Error(section?"该成员还未加入本群或授权已撤回。新成员须使用「保存全部」。":"分工仍引用已移除或已撤权的成员，请重新选择。");
+        if((first||reviewer)&&(!first||!reviewer||first===reviewer))throw Error("首做与复核须为两位不同成员。");
+        if(delivery&&![first,reviewer].includes(delivery))throw Error("最终交付人须为首做或复核成员。");
+        const flow=first?{mode:"until-final-review",firstBotId:first,reviewerId:reviewer,memberIds:[first,reviewer],
+          ...(delivery?{delivererId:delivery}:{delivererId:null})}:null;
+        queued("roles",{leaderBotId:leader||null,teamWorkflow:flow});
+      }
+      if(groups.includes("compression")){
+        focus="compression";
+        const {inherit,ratio,tokens,keep,history}=merged.compression;
+        const integer=(value,min)=>value!==""&&Number.isSafeInteger(Number(value))&&Number(value)>=min;
+        if(!integer(keep,1))throw Error("压缩后保留最近条数至少为 1。");
+        if(history&&!integer(history,0))throw Error("历史条数须为非负整数或留空。");
+        if(!inherit&&(!Number.isFinite(Number(ratio))||Number(ratio)<0.1||Number(ratio)>0.95))throw Error("模型窗口比例须在 0.10 到 0.95 之间。");
+        if(!inherit&&tokens&&!integer(tokens,1000))throw Error("自定义 token 阈值须为至少 1000 的整数或留空。");
+        const compression={inherit,keepLast:Number(keep),historyMessages:history?Number(history):null,
+          ...(!inherit?{thresholdRatio:Number(ratio),tokenThreshold:tokens?Number(tokens):null}:{})};
+        merged.compression={inherit,ratio:inherit?"0.8":String(Math.round(Number(ratio)*100)/100),tokens:inherit||!tokens?"":String(Number(tokens)),keep:String(Number(keep)),history:history?String(Number(history)):""};
+        queued("compression",{compression});
+      }
+      if(groups.length>1)focus=tab;
+      const result=await remote.updateRoom(input);
+      if(result?.id!==room.id)throw Error("没有收到本群的保存回执。");
+      const read=roomSettingsValues(result,defaultAdmission);
+      const mismatch=Object.keys(submitted).find(key=>!sameSetting(read[key],submitted[key]));
+      if(mismatch){focus=mismatch;throw Error("宿主回读与提交内容不一致，编辑已保留。")}
+      setActual(result);setSaved(read);
+      setDraft(Object.fromEntries(Object.keys(settingsSections).map(key=>[key,submitted[key]?read[key]:merged[key]])));
+      if(!section)onSaved();
+      else { onChanged?.(); setNotice(settingsSections[section]+"已保存"); }
+    } catch(error){
+      setTab(focus);
+      setProblem(settingsSections[focus]+" · "+describe$1(error));
+    } finally {saving.current=false;setBusy(false)}
+  }
+  if(more)return jsx(AdvancedWorkstudioRoomSettings,{room:actual,bots,busy,setBusy,remote,onClose:()=>setMore(false),onSaved});
+  const panels={
+    basic:jsxs("div",{className:"stack",children:[
+      field("群聊名称",jsx("input",{type:"text",maxLength:48,value:draft.basic.name,disabled:busy,onChange:e=>set("basic","name",e.target.value)})),
+      jsxs("div",{className:"member-block",children:[
+        jsxs("div",{className:"member-head",children:[jsxs("div",{children:[jsx("strong",{children:"成员 "}),help(draft.basic.members.length+" 位")]}),
+          action("添加成员",()=>setAdding(!adding),"tint small",{disabled:busy||!available.length,"aria-expanded":adding})]}),
+        jsx("div",{className:"members",children:draft.basic.members.map(id=>jsxs("div",{className:"member",children:[
+          jsx("span",{className:"avatar","aria-hidden":true,children:groupName(bots.find(bot=>bot.id===id)||{name:nameOf(id)}).slice(0,1)}),
+          jsx("span",{children:nameOf(id)}),action("移除",()=>set("basic","members",draft.basic.members.filter(member=>member!==id)),"small",{disabled:busy||draft.basic.members.length<=1,"aria-label":"移除 "+nameOf(id)})
+        ]},id))}),
+        adding&&jsxs("div",{className:"add-member",children:[
+          jsxs("select",{"aria-label":"选择要添加的成员",value:candidate,onChange:e=>setCandidate(e.target.value),children:[
+            jsx("option",{value:"",children:"选择成员"}),...available.map(bot=>jsx("option",{value:bot.id,children:bot.name},bot.id))]}),
+          action("添加",()=>{set("basic","members",[...draft.basic.members,candidate]);setCandidate("");setAdding(false)},"tint",{disabled:busy||!available.some(bot=>bot.id===candidate)})
+        ]})
+      ]})
+    ]}),
+    reply:jsxs(Fragment,{children:[
+      jsxs("div",{className:"stack",children:[
+        jsx("div",{className:"setting-block",children:jsxs("div",{className:"state-note",children:[
+          jsxs("div",{children:[jsx("strong",{children:"点名授权"}),help("每条用户消息独立授权，接力在本次点名授权范围内自动继续。")]}),
+          jsx("span",{className:"state-badge",children:"始终生效"})]})}),
+        toggle("reply","paused","暂停自动回复","开启暂停后，群聊暂不自动回复。"),
+        field("未点名消息的处理",select("reply","admission",[["legacy","按当前规则回复（默认）"],["observe","只记录，不自动回复"],["auto","由群主判断并安排"]]),"派单、续做和接力仍受原任务的点名授权约束。")
+      ]}),
+      jsxs("details",{className:"details",children:[
+        jsxs("summary",{children:["高级选项 · 提前准备回复", help(" · "+({off:"关闭",observe:"仅记录",on:"自动提前准备"}[draft.reply.speculation]??"关闭"))]}),
+        jsx("div",{className:"details-body",children:field("提前准备回复",select("reply","speculation",[["off","关闭（默认）"],["observe","仅记录可提前准备的场景"],["on","自动提前准备（草稿不发送）"]]),"符合条件时，群队长可在后台试写草稿。仅记录模式只留下记录。")})
+      ]})
+    ]}),
+    roles:jsxs(Fragment,{children:[
+      jsxs("div",{className:"fields",children:[
+        field("群队长",roleSelect("leader","默认：按成员顺序")),field("首做成员",roleSelect("first","未设置")),
+        field("复核成员",roleSelect("reviewer","未设置")),
+        field("最终交付人",roleSelect("delivery","使用默认交付人",memberChoices.filter(([id])=>[draft.roles.first,draft.roles.reviewer].includes(id))))
+      ]}),
+      jsx("div",{className:"section-actions",children:action("保存队长与分工",()=>save("roles"),"tint",{disabled:busy||!dirty.includes("roles")})})
+    ]}),
+    compression:jsxs(Fragment,{children:[
+      jsxs("div",{className:"setting-block",children:[
+        toggle("compression","inherit","继承当前配置","关闭继承后，可单独设置本群的压缩阈值。"),
+        jsxs("div",{className:"fields",children:[
+          field("模型窗口比例",number("ratio",{min:0.1,max:0.95,step:0.01}),"自定义 token 阈值留空时使用"),
+          field("自定义 token 阈值",number("tokens",{min:1000,placeholder:"留空使用窗口比例"})),
+          field("压缩后保留最近条数",number("keep",{min:1})),
+          field("补入模型的历史条数",number("history",{min:0,placeholder:"留空继承"}))]})
+      ]}),
+      jsxs("details",{className:"details",children:[
+        jsx("summary",{children:"查看压缩状态与证据"}),
+        jsxs("div",{className:"details-body",children:[
+          help("已保存设置 · "+(saved.compression.inherit?"继承当前配置":"本群自定义")+" · 保留最近 "+saved.compression.keep+" 条"),
+          ...(actual.compressionEffective?.runners??[]).map((row,i)=>jsx("p",{children:(row.runnerName??row.runner)+" · "+(row.tokenThreshold!=null?row.tokenThreshold+" tokens":"阈值待回读")+" · "+({pending:"等待宿主回执",configured:"宿主已生效",observed:"已观察到压缩"}[row.status]??"")},i)),
+          ...(actual.compressionEffective?.runners?.some(item=>item.compressionObserved)?[help("已记录实际压缩事件")]:[help("当前没有实际压缩证据")])
+        ]})
+      ]}),
+      jsx("div",{className:"section-actions",children:action("保存压缩设置",()=>save("compression"),"tint",{disabled:busy||!dirty.includes("compression")})})
+    ]})
+  };
+  return jsx(NativeDialog,{open:true,onClose:()=>askClose(),title:"群聊设置",children:jsxs("div",{className:"ws-settings",children:[
+    jsx("style",{children:WORKSTUDIO_ROOM_SETTINGS_CSS}),
+    jsxs("header",{className:"dialog-head",children:[
+      jsxs("div",{children:[jsx("h1",{children:"群聊设置"}),help(actual.name)]}),
+      jsxs("div",{className:"toolbar-actions",children:[
+        action("任务提醒 ⌄",()=>{setReminders(!reminders);if(!reminders)void reminder("list")},"tint small",{"aria-expanded":reminders,"aria-label":"任务提醒"}),
+        action("×",()=>askClose(),"square",{"aria-label":"关闭",disabled:busy})
+      ]}),
+      reminders&&jsxs("aside",{className:"reminders","aria-label":"任务提醒",children:[
+        jsxs("label",{className:"checkrow",children:[
+          jsxs("span",{children:[jsx("strong",{children:"静音桌面提醒"}),help("作用于本工作区")]}),
+          jsx("input",{type:"checkbox",role:"switch",className:"toggle","aria-label":"静音桌面提醒",checked:!!feed?.quiet,disabled:!feed||reminderBusy,onChange:e=>reminder("quiet",{value:e.target.checked})})
+        ]}),
+        jsxs("details",{className:"details",children:[
+          jsx("summary",{children:"查看任务提醒历史"}),
+          jsx("div",{className:"details-body",children:feed?.events?.length?feed.events.map(e=>
+            action(e.roomName+" · "+e.title,()=>dirty.length?setReminderError("请先保存或取消群设置草稿。"):reminder("navigate",{key:e.key}),"small",{"data-reminder-key":e.key,disabled:reminderBusy})):help(feed?"暂无任务提醒":"正在读取…")})
+        ]}),
+        reminderError&&jsx("p",{role:"alert",className:"error",children:reminderError})
+      ]})
+    ]}),
+    jsxs("div",{className:"layout",children:[
+      jsx("nav",{className:"settings-nav","aria-label":"群聊设置分类",children:Object.entries(settingsSections).map(([key,title])=>
+        jsx("button",{type:"button",className:"nav-entry","aria-current":tab===key?"true":undefined,onClick:()=>{setTab(key);setNotice("")},
+          children:jsxs(Fragment,{children:[title,dirty.includes(key)&&jsx("span",{className:"nav-dot","aria-label":"有未保存修改"})]})},key))}),
+      jsxs("section",{className:"panels","data-settings-section":tab,children:[
+        jsxs("header",{className:"section-head",children:[jsx("h2",{children:settingsSections[tab]}),
+          tab==="roles"&&jsx("p",{className:"muted",children:"队长协调与派工，成员按各自职责完成任务。"})]}),
+        panels[tab],
+        problem&&jsx("p",{className:"error",role:"alert",children:problem}),
+        notice&&jsx("p",{className:"muted",role:"status",children:notice})
+      ]})
+    ]}),
+    discard&&jsxs("div",{className:"discard",role:"alert",children:["还有未保存的改动。",jsxs("div",{className:"footer-actions",children:[
+      action("继续编辑",()=>setDiscard(null),"small"),action("放弃更改",doDiscard,"small")]})]}),
+    jsxs("footer",{className:"dialog-footer",children:[
+      action("更多管理",()=>askClose("more"),"small",{disabled:busy}),
+      jsxs("div",{className:"footer-actions",children:[
+        action("取消",()=>askClose(),"",{disabled:busy}),action(busy?"保存中…":"保存全部",()=>save(),"main",{disabled:busy})]})
+    ]})
+  ]})});
+}
+
+function AdvancedWorkstudioRoomSettings({ room, defaultAdmission = "legacy", bots, busy, setBusy, remote, onClose, onSaved }) {
 	const [name, setName] = useState(room.name);
 	const [members, setMembers] = useState([...room.memberIds]);
 	const [mentionOnly, setMentionOnly] = useState(room.mentionOnly);
@@ -68330,6 +69214,7 @@ function RoomSettingsDialog({ room, defaultAdmission = "legacy", bots, busy, set
 			})]
 		}),
 		children: [
+      jsx(ReminderHistory,{remote,onClose}),
 			/* @__PURE__ */ jsxs("form", {
 				id: "room-settings-form",
 				className: css.formLegacy,
@@ -68656,7 +69541,7 @@ function RoomSettingsDialog({ room, defaultAdmission = "legacy", bots, busy, set
 							cursor: "default"
 						},
 						children: [
-							jsx(TeamWorkflowSettings,{room,bots,remote,onSaved,busy,setBusy,leaderBotId}),
+							jsx(TeamWorkflowSettings,{room,bots,remote,onSaved,busy,setBusy,leaderBotId},room.id),
 							/* @__PURE__ */ jsx("span", { children: "上下文压缩" }),
 							/* @__PURE__ */ jsxs("label", {
 								className: css.check,
@@ -69129,7 +70014,7 @@ function findButton(panelId) {
 	});
 }
 /** The entry's visible name, used only by the legacy aria-label fallback above. */
-const PANEL_LABEL_HINT = "同机工作室";
+const PANEL_LABEL_HINT = "同机工作室测试版";
 /** Text a badge should show, or '' when there is nothing to show. */
 function badgeText() {
 	if (count === 0) return "";
@@ -69628,19 +70513,19 @@ function CommunityPage({ remote, diagnostics }) {
 			display: "grid",
 			gap: 6,
 			padding: "8px 12px 12px",
-			borderTop: "0.5px solid var(--dsw-alias-border-l2)",
-			background: "var(--dsw-alias-bg-module-platform)",
+			borderTop: "1px solid var(--ws-line)",
+			background: "var(--ws-sidebar)",
 			...narrowLayout ? {} : {
 				gridColumn: "1",
 				gridRow: "2",
-				borderRight: "1px solid var(--dsw-alias-border-l2)"
+				borderRight: "1px solid var(--ws-line)"
 			}
 		},
 		children: /* @__PURE__ */ jsxs("p", {
 			"data-presence-counts": "",
 			style: {
 				margin: 0,
-				color: "var(--dsw-alias-label-tertiary)",
+				color: "var(--ws-muted)",
 				fontSize: 11,
 				lineHeight: "16px"
 			},
@@ -69780,7 +70665,7 @@ function CommunityPage({ remote, diagnostics }) {
 				onClose: () => setCustomCliOpen(false),
 				remote
 			}),
-			roomSettingsOpen && editingRoom !== void 0 && /* @__PURE__ */ jsx(RoomSettingsDialog, {
+			roomSettingsOpen && editingRoom !== void 0 && /* @__PURE__ */ jsx(WorkstudioRoomSettings, { onChanged:load,
 				room: editingRoom,
 				defaultAdmission: snapshot?.admissionDefault ?? "legacy",
 				bots: visibleBots,
@@ -70310,6 +71195,7 @@ function apply(ctx) {
 		proposeGroup: (input) => call("proposeGroup", input),
 		confirmGroup: (input) => call("confirmGroup", input),
 		declineGroup: (input) => call("declineGroup", input),
+		listMessages: roomId => call("listMessages", roomId),
 		listLedger: (roomId, opts) => call("listLedger", roomId, opts),
 		exportLedger: (roomId, format) => call("exportLedger", roomId, format),
 		getRoomKnowledge: (roomId) => call("getRoomKnowledge", roomId),
@@ -70379,11 +71265,11 @@ function apply(ctx) {
 	}
 	ctx.locale.register(NS, {
 		zh: {
-			panel: "同机工作室",
+			panel: "同机工作室测试版",
 			localAgentPanel: "本机 Agent"
 		},
 		en: {
-			panel: "同机工作室",
+			panel: "同机工作室测试版",
 			localAgentPanel: "Local agents"
 		}
 	});

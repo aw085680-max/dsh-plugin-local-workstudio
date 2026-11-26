@@ -17,7 +17,7 @@ export function returnIntent(text){
     /^(?:交接给|转交|交给|送回|退回|发回|请|让).{1,45}(?:同意|复核|复审|确认|签核)/u.test(value);
 }
 export function reviewQuestion(text){
-  return /(?:同意|复核|签收|签核|接单|交接|收到|派回|退回).{0,16}(?:[？?]|了吗|了没|没有[？?]?$)|(?:是否|有没有|是不是|我想问).{0,35}(?:同意|复核|签收|签核|交接|接到)/u.test(text);
+  return /(?:同意|复核|签收|签核|接单|交接|收到|派回|退回)(?:[？?]|.{0,16}(?:了吗|了没|没有[？?]?$))|(?:是否|有没有|是不是|我想问).{0,35}(?:同意|复核|签收|签核|交接|接到)/u.test(text);
 }
 export function claimsReview(text){
   return /(?:现在|刚才|刚刚|已经|已|我会把|我把|现把).{0,32}(?:交接给|交给|送交|提交给|派给|发给|派回|送回|转交|已接单)|(?:^|\n)@[^@\n]{1,36}\s*请.{0,12}(?:复核|同意|签收)|(?:已|已经)(?:完成交接|同意(?:这|本|该)版|接到(?:这|本|该)(?:版|单))|本轮任务已结束/u.test(text);
@@ -196,7 +196,7 @@ export class TeamReview {
   }
   missingDecision(r,d){
     const s=r.state,step=s.steps[d.stepId],subject=this.subject(step.handoffIds.map(id=>s.handoffs[id]))??(!step.handoffIds.length&&this.offerFor(s,d.targetId,d.authorizationId));
-    if(!subject||!d.terminal||r.events.some(e=>e.payload.dispatchId===d.dispatchId&&(e.payload.reviewDecision||e.type==="ARTIFACT_CONFIRMED")))return;
+    if(step.purpose==="final-delivery"||!subject||!d.terminal||r.events.some(e=>e.payload.dispatchId===d.dispatchId&&(e.payload.reviewDecision||e.type==="ARTIFACT_CONFIRMED")))return;
     const signed=step.handoffIds.length?step.handoffIds.every(id=>s.handoffs[id]?.acceptedDispatchId===d.dispatchId):s.bindings[d.targetId]?.reviewReceipt?.dispatchId===d.dispatchId;
     return this.name(d.targetId)+(signed?"已签收，缺少本人对这版的复核意见。":"这一棒已结束，缺少本人签收。")+"可在原任务继续补交。";
   }
@@ -207,6 +207,16 @@ export class TeamReview {
       const {p,r}=team.actorRun(input.roomId,input.botId),s=r.state,d=s.dispatches[run.dispatchId],step=s.steps[d.stepId];
       if(p.dispatchId!==run.dispatchId||s.roles.confirmers?.length!==2||!s.roles.confirmers.includes(run.botId)||input.sessionId!==run.sessionId)throw Error("复核必须由当前原单成员的实际会话处理。");
       const current=this.versionFor(s,d),action=input.action;
+      const access=team.documentAccess(input.sessionId);
+      if(Object.values(s.authSnapshots).some(a=>a.documentWorkOrder) && (!access||access.dispatchId!==d.dispatchId||!access.operations.includes(action)))throw Error("当前文稿授权与操作或派单不匹配");
+      if(s.roles.unattended){
+        const reviewer=run.botId===s.roles.reviewer;
+        const authorCosign = !reviewer && action==="approve" && !!norm(input.reason) && (
+          s.authSnapshots[d.authorizationId]?.jointReview?.versionId===s.versionId ||
+          (s.roles.writerFinalReview || s.recoveredReview?.versionId===s.versionId) && signatureVerified(s,s.roles.reviewer));
+        if(reviewer&&action==="revise"||!reviewer&&!authorCosign&&["approve","changes"].includes(action))throw Error("请按本轮主笔和复核分工提交意见");
+        if(reviewer&&["approve","changes"].includes(action)&&!norm(input.reason))throw Error("请留下对本轮实际稿件的复核依据");
+      }
       if(!["receive","approve","changes","revise"].includes(action))throw Error("未知复核动作。");
       const other=s.roles.confirmers.find(id=>id!==run.botId),events=[];
       const recorded=r.events.findLast(e=>e.payload?.dispatchId===d.dispatchId&&(e.payload.reviewDecision||e.type==="ARTIFACT_CONFIRMED"));
@@ -236,7 +246,7 @@ export class TeamReview {
       const result={action,versionId:version,...(norm(input.reason)?{reason:norm(input.reason)}:{}),inputHash:digest([action,input.versionId??null,norm(input.report),norm(input.reason)])};
       if(action==="changes"){
         const reason=norm(input.reason);if(!reason)throw Error("请写明需修改的内容。");
-        const key="changes:"+digest([s.taskId,version,run.botId,other]);
+        const key="changes:"+digest([s.taskId,version,run.botId,other,...(s.authSnapshots[d.authorizationId]?.jointReview?[d.authorizationId]:[])]);
         const h={id:key,step:"review-changes",targetId:other,textRef:await team.store.putBlob([reason]),evidenceRefs:current.refs,reviewSubject:{manifest:current.manifest,refs:current.refs},
           contentHash:digest([version,reason]),reviewDecision:{versionId:version,reason}};
         events.push(team.events("HANDOFF_SUBMITTED",{...p,handoff:h,reviewDecision:{...result,reason}},"decision:"+d.dispatchId));
@@ -247,6 +257,8 @@ export class TeamReview {
         result.versionId=packet.manifest.versionId;
         events.push(team.events("ARTIFACT_CONFIRMED",{...p,manifest:packet.manifest,evidenceRefs:packet.refs,reviewDecision:result},"decision:"+d.dispatchId));
       }
+      const supplement=this.svc.state.messages.findLast(row=>s.roles.unattended&&row.taskRef===s.taskId&&row.routeDecision?.intent==="append"&&!row.requestError&&!s.authSnapshots[row.id]);
+      if(supplement)result.pendingRequirement={id:supplement.id,text:supplement.text};
       if(events.length)await team.commit(s.taskId,events,r.revision);
       return {ok:true,...result,accepted:step.handoffIds,dispatchId:d.dispatchId};
     });

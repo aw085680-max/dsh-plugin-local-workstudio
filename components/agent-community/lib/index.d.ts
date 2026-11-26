@@ -1,3 +1,6 @@
+type DeliverableAddress = {roomId: string} & (
+  {runId: string; index: number} | {reminderKey: string; fileId: string; runId?: string}
+);
 import { $ as FinishEvidence, $t as RunRetryPolicy, A as BotSkillProfile, At as RunFaultSide, B as ConfirmGroupRequest, Bt as SubmitFinalRequest, C as BotRoomId, Ct as RoomGoal, D as BotRun, Dt as RoomTaskAssignment, E as BotRoomSpeculation, Et as RoomPatternRequest, F as BotTeamMembership, Ft as ScopedMemoryView, G as DeclineGroupRequest, Gt as ThreadSubscription, H as CreateBotRequest, Ht as TeamApprovalAnswer, I as BotTeamMessageKind, It as SendRoomMessageAttachment, J as DeleteRoomMemoryRequest, Jt as UpdateBotRequest, K as DecomposeTasksRequest, Kt as ThreadSubscriptionAuthority, L as BotTeamRunOrigin, Lt as SendRoomMessageRequest, M as BotTaskStatus, Mt as ScopedMemoryEntryView, N as BotTeam, Nt as ScopedMemoryJournalRow, O as BotRunId, Ot as RoomTaskState, P as BotTeamLeader, Pt as ScopedMemoryScopeName, Q as DismissTeamRequest, Qt as UpdateScopedMemoryRequest, R as CompactExperienceRequest, Rt as SettleBotRunRequest, S as BotRoomAssessment, St as RoomExperienceCard, T as BotRoomPolicy, Tt as RoomMemoryView, U as CreateRoomRequest, Ut as TeamMessageResult, V as ControlBotRunRequest, Vt as TeamApproval, W as CreateTeamRequest, Wt as TeamOverview, X as DeleteScopedMemoryRequest, Xt as UpdateRoomMemoryRequest, Y as DeleteRoomRequest, Yt as UpdateRoomExperienceRequest, Z as DeliveredFile, Zt as UpdateRoomRequest, _ as BotMessageUsage, _t as RemoveBotsRequest, a as BotAvatar, at as ListScopedMemoryRequest, b as BotRoom, bt as RevertRoomMemoryRequest, c as BotId, ct as NoticeRoomRequest, d as BotMemoryEntry, dt as OpenWorkRoom, en as RunTimeoutPolicy, et as FinishTaskRequest, f as BotMemoryRecord, ft as OpenWorkView, g as BotMessageSenderKind, gt as ProposeGroupRequest, h as BotMessageId, ht as PostTeamMessageRequest, i as AssignTasksRequest, it as ListRoomMemoryRequest, j as BotTask, jt as RunFinishPath, k as BotRunStatus, kt as RunEvidence, l as BotIdentity, lt as OpenWorkItem, m as BotMessageAttachment, mt as PostBotMessageRequest, n as AdmissionMode, nt as GroupProposal, o as BotCommunitySnapshot, ot as MarkRoomReadRequest, p as BotMessage, pt as PendingGroupProposal, q as DeleteBotRequest, qt as ThreadSubscriptionSource, r as AnswerBotQuestionRequest, rt as HarnessAttribution, s as BotConnectionState, st as MemoryMutationResult, t as AbstainRequest, tt as GroupPatternCard, u as BotMailboxItem, ut as OpenWorkKind, v as BotPresence, vt as ReportTaskRequest, w as BotRoomNotice, wt as RoomGoalAuthorization, x as BotRoomAdmission, xt as RevertScopedMemoryRequest, y as BotProfileBinding, yt as RetryBotRunRequest, z as CompactExperienceResult, zt as SpeculationMode } from "./types-CCMbdGS6.js";
 import { TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import z from "@deepseek-ai/schemastery";
@@ -1779,10 +1782,7 @@ declare class AgentCommunityService extends TypertRemoteService {
    * `sessionController` service, which is the same implementation DSH's chat cards use
    * from the browser — it does not depend on the client Remote surface.
    */
-  deliverableFileAction(input: {
-    roomId: string;
-    runId: string;
-    index: number;
+  deliverableFileAction(input: DeliverableAddress & {
     action: 'applications' | 'open' | 'reveal';
     application?: string | undefined;
   }): Promise<{
@@ -1805,11 +1805,7 @@ declare class AgentCommunityService extends TypertRemoteService {
    * Office fidelity comes from the Host's own `office-to-pdf` provider — the same
    * engine DSH's document preview uses — addressed through the delivery record.
    */
-  renderDeliverableDocument(input: {
-    roomId: string;
-    runId: string;
-    index: number;
-  }): Promise<{
+  renderDeliverableDocument(input: DeliverableAddress): Promise<{
     ok: true;
     name: string;
     dataUrl: string;
@@ -1827,10 +1823,7 @@ declare class AgentCommunityService extends TypertRemoteService {
    * the card can hand it to a native app. Bot session ids never cross this boundary
    * (the ledger's red line).
    */
-  readDeliverablePreview(input: {
-    roomId: string;
-    runId: string;
-    index: number;
+  readDeliverablePreview(input: DeliverableAddress & {
     offset?: number | undefined;
   }): Promise<{
     kind: 'text';

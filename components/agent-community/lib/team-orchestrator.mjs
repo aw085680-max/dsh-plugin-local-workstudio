@@ -1,3 +1,13 @@
+import {recoveredCodexResult} from "./team-session-recovery.mjs";
+import {beginJointReview,matchedReview} from "./joint-review.mjs";
+import {documentPreflight,preflightPrefix} from "./document-preflight.mjs";
+import {documentOperations,hasDocumentOrder} from "./document-work-order.mjs";
+import {attachedDocumentSources} from "./attached-document-sources.mjs";
+import {documentApproval,approvalBlockReason} from "./document-approval.mjs";
+import {pinSingleDeliverables} from "./single-file.mjs";
+import {managedGroup} from "./group-routing.mjs";
+
+import {deliveryPair,reviewInstruction} from "./unattended.mjs";
 import {TaskReminders, requestsFile} from "./task-reminders.mjs";
 import {TeamFollowup} from "./team-followup.mjs";
 import {TeamReview,claimsReview} from "./team-review.mjs";
@@ -7,7 +17,7 @@ import {TeamMemberAssignments, parseMemberAssignments} from "./team-member-assig
 import {ThreadCloser} from "./team-thread-close.mjs";
 import {classifyGroupMessage, classifyUserRequest, maskGroupLinks, displayReply, isChatRun, requestMessageId} from "./team-chat-routing.mjs";
 import {randomUUID,createHash} from "node:crypto";
-import {appendFile,readFile,writeFile,mkdir} from "node:fs/promises";
+import {appendFile,readFile,writeFile,mkdir,rename,unlink,readdir,realpath} from "node:fs/promises";
 import {join,basename,resolve,relative} from "node:path";
 import {TaskStore} from "./team-store.mjs";
 import {bindingRefusal,failedBeforeCodexTurn,copy,canonical,digest,emptyState,effectiveMembers,manifestOf,completionReady,signatureVerified,TransitionError,apply} from "./team-machine.mjs";
@@ -17,6 +27,7 @@ const ended=s=>["succeeded","failed","cancelled"].includes(s);
 const live=s=>!["completed","stopped"].includes(s.status);
 const absent=x=>x===undefined||x===null;
 const continuationTtlMs = 30 * 1000;
+const maxDeliveryDurationMs = 4 * 60 * 60 * 1000;
 // Local Agent emits this before it asks the Codex App Server to start a turn.
 const codexResumeWriterError = /^(?:宿主受理或回合启动证据缺失：)?agent-community: 模型请求失败（provider=codex-cli model=[^）\r\n]+）：Codex native continuation was not accepted for persisted thread ([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}): thread \1 already has an active writer(?:[。.]|$)/iu;
 
@@ -61,7 +72,7 @@ function summarizeTeamGoal(value) {
 export class TeamOrchestrator {
   constructor(svc,helpers){
     this.svc=svc;this.helpers=helpers;this.work=new Map();this.originals={};this.goalCache=new Map();this.handoffTextCache=new Map();this.opened=false;this.draining=false;
-    this.legacyCapped=new Map();this.deliveryReceipts=new Map();
+    this.legacyCapped=new Map();this.deliveryReceipts=new Map();this.nextDocumentCheck=new Map();
     this.store=new TaskStore({root:join(svc.home,"agent-community","team-tasks"),logger:svc.ctx.logger,
       onLockLost:error=>{svc.writesBlocked=true;svc.executor?.dispose();svc.ctx.logger.error("编排停止："+error.message);}});
     this.sessionBridge=new TeamSessionBridge(this);this.runtimeWork=new Map();this.stoppedCodexChecks=new Map();this.waitingTerminals=new Map();
@@ -108,10 +119,23 @@ export class TeamOrchestrator {
       try {
         await this.migrate();
         await this.rebuildProjection();
+        await this.recoverDocumentBlocks();
       }catch(error){
         this.opened=false;
         this.store.failed=error;
         this.svc.ctx.logger.warn("任务资料待核对，群聊仍可运行："+error.message);
+      }
+    }
+    if(this.opened){
+      const directory=join(this.store.root,"message-outbox");
+      await mkdir(directory,{recursive:true});
+      for(const file of await readdir(directory)){
+        if(!/^[a-f0-9]{64}\.json$/u.test(file))continue;
+        const packet=JSON.parse(await readFile(join(directory,file),"utf8"));this.store.checkSeal(packet);
+        const msg=packet.message;
+        if(!this.svc.getRoom(msg.roomId)||msg.sender.kind!=="user"||digest([msg.roomId,msg.id])+".json"!==file)continue;
+        await this.persistMessage(msg,{recover:true});
+        await unlink(join(directory,file)).catch(e=>{if(e.code!=="ENOENT")throw e;});
       }
     }
     await this.expireChoices();
@@ -166,7 +190,7 @@ export class TeamOrchestrator {
   }
   wrap(name,fn){const original=this.svc[name]?.bind(this.svc);if(!original)throw Error("集成入口缺失："+name);this.originals[name]=original;this.svc[name]=(...args)=>fn(original,...args);}
   install(){
-    this.wrap("sendMessageInRoom",(old,input)=>this.isGroup(input.roomId)?this.send(input):old(input));
+    this.wrap("sendMessageInRoom",(old,input)=>this.isGroup(input.roomId)?this.serial("ingress:"+input.roomId,()=>this.send(input)):old(input));
     this.wrap("submitMentionHandoff",(old,input)=>this.isGroup(input.roomId)?this.submit(input):old(input));
     this.wrap("acceptMentionHandoff",(old,input)=>this.isGroup(input.roomId)?this.accept(input):old(input));
     this.wrap("mentionHandoffStatus",(old,input)=>this.isGroup(input.roomId)?this.handoffStatus(input):old(input));
@@ -209,7 +233,8 @@ export class TeamOrchestrator {
     this.wrap("settleRun",async(old,input)=>{
       const run=this.svc.state.runs.find(r=>r.id===input.id);
       if(isChatRun(run)){
-        const result=await old(this.chat.settlement(run,input));
+        const resolved=await this.chat.resolveConditional(run,input);
+        const result=await old(this.chat.settlement(run,resolved));
         await this.chat.settled(result);
         return result;
       }
@@ -353,6 +378,11 @@ export class TeamOrchestrator {
   async onLedgerRecovered(){
     if(!this.opened)return;
     for(const r of this.store.list()){
+      const goal=this.goalCache.get(r.taskId);
+      if(goal?.sender?.kind==="user"&&goal.taskRef===r.taskId&&goal.roomId===r.state.roomId&&this.svc.getRoom(goal.roomId)){
+        const seen=this.svc.ledger.listLedger(goal.roomId,{force:true,limit:Number.MAX_SAFE_INTEGER}).some(row=>row.type==="user"&&row.messageId===goal.id);
+        if(!seen||!this.svc.state.messages.some(m=>m.roomId===goal.roomId&&m.id===goal.id))await this.persistMessage(goal,{recover:true});
+      }
       if(r.state.status!=="completed"||!hasFinalSignatures(r.state)||!requiresFinalDelivery(r.state))continue;
       await this.readFinalReceipt(r.state);
       await this.project(r);
@@ -366,6 +396,7 @@ export class TeamOrchestrator {
   }
   resumeKind(s) {
     if(s.stop)return null;
+    if(s.status==="pending-review"&&s.missing?.some(text=>text.startsWith(preflightPrefix)||text.startsWith("宿主审批阻塞（")))return "handoff";
     if(s.status==="completed"&&this.legacyCapped.has(s.taskId))return "legacy-cap";
     if(this.signatureDeliveryNeeded(s)&&s.status==="completed")return "final-delivery";
     const current=s.steps[s.currentStepId];
@@ -392,10 +423,75 @@ export class TeamOrchestrator {
     if(resume==="legacy-cap")return {status:"pending-review",resume,
       missing:["原待办仍在，选择「继续原任务」将沿原授权接棒"]};
     if(this.signatureDeliveryNeeded(s)&&s.status!=="verifying"&&s.status!=="stopping"){
-      const detail=s.missing[0]??{pending:"下一棒等待投递",delivered:"终审成员已收件",running:"终审成员正在核对并交稿"}[s.status];
-      return {status:"pending-delivery",resume,missing:[detail??"同版本已签核，等待终审成员发出文件"]};
+      const detail=s.missing[0]??{pending:"下一棒等待投递",delivered:"交付成员已收件",running:"交付成员正在核对并交稿"}[s.status];
+      return {status:"pending-delivery",resume,missing:[detail??"同版本已签核，等待交付成员发出文件"]};
     }
     return {status:s.status,resume,missing:s.missing};
+  }
+  documentAccess(sessionId) {
+    const runs=this.svc.state.runs.filter(r=>r.status==="running"&&r.sessionId===sessionId&&this.managed(r));
+    if(runs.length!==1)return null;
+    const run=runs[0], state=this.recordForRun(run)?.state, room=this.svc.getRoom(run.roomId);
+    if(!hasDocumentOrder(state))return null;
+    return {taskId:run.teamTaskId,dispatchId:run.dispatchId,singleFile:!!state.roles.assignment?.singleFile,operations:this.canClaim(run)?
+      documentOperations(state,run,room,this.currentMembers(run.roomId)):[]};
+  }
+  async documentDraftWorkspace(sessionId) {
+    const access=this.documentAccess(sessionId);
+    if (!access?.operations.length) return undefined;
+    const run=this.svc.state.runs.find(r=>r.sessionId===sessionId && r.dispatchId===access.dispatchId);
+    if (!run || this.svc.getRoom(run.roomId)?.paused) return undefined;
+    const workspace=this.svc.runWorkspaceDir(run.botId);
+    await mkdir(workspace,{recursive:true});
+    const canonicalWorkspace=await realpath(workspace);
+    const drafts=join(canonicalWorkspace,"document-drafts");
+    const taskDir=join(drafts,digest(access.taskId));
+    await mkdir(drafts,{recursive:true});
+    if (await realpath(drafts)!==drafts) throw Error("本单草稿目录不在当前成员工作区");
+    await mkdir(taskDir,{recursive:true});
+    if (await realpath(taskDir)!==taskDir) throw Error("本单草稿目录不在当前成员工作区");
+    return taskDir;
+  }
+  async documentBlock(record, dispatch, includeEarlierRecoveries=false) {
+    const audit = this.svc.ctx.get?.('sessionPersistence');
+    const state = record.state;
+    if (!audit || !(hasDocumentOrder(state)) || !state.roles.unattended || !dispatch?.terminal) return null;
+    const run = this.svc.state.runs.find(row => row.id === dispatch.runId && row.teamTaskId === state.taskId && row.botId === dispatch.targetId);
+    if (!run) return null;
+    let stored;
+    try {
+      stored = await audit.open(run.sessionId, 'read');
+      if (String(stored.header.id) !== run.sessionId || String(stored.id) !== run.sessionId) return null;
+      const {events} = await stored.read();
+      let current = dispatch;
+      while (current) {
+        const decision = documentApproval(events,current.dispatchId,true);
+        if (decision) return approvalBlockReason(decision);
+        if (!includeEarlierRecoveries) break;
+        const requeue = record.events.findLast(e => e.type === 'REVIEW_REQUEUED' &&
+          e.payload.targetId === current.targetId && e.payload.authorizationId === current.authorizationId &&
+          e.payload.versionId === state.versionId && e.seq < record.events.find(e =>
+            e.type === 'STEP_PLANNED' && e.payload.stepId === current.stepId)?.seq);
+        const previous = requeue && state.dispatches[requeue.payload.dispatchId];
+        if (!previous || state.steps[previous.stepId]?.order !== state.steps[current.stepId]?.order - 1 ||
+            this.svc.state.runs.find(r => r.id===previous.runId)?.sessionId !== run.sessionId) break;
+        current = previous;
+      }
+      return null;
+    } catch (error) {
+      this.svc.ctx.logger?.warn?.('无法读取派单的宿主审批记录：'+(error.code??error.name));
+      return null;
+    } finally { await stored?.close(); }
+  }
+  async recoverDocumentBlocks() {
+    for (const record of this.store.list()) {
+      const s=record.state, step=s.steps[s.currentStepId];
+      if (!(hasDocumentOrder(s)) || s.status!=='pending-review' || !s.roles.unattended || !step ||
+          !s.missing.some(text=>text.includes('两次补做后仍未交回'))) continue;
+      const dispatch=s.dispatches[step.attempts[step.currentAttemptId]?.dispatchId];
+      const reason=await this.documentBlock(record,dispatch,true);
+      if (reason) await this.waitForAction(record.taskId,[reason]);
+    }
   }
   async waitForAction(taskId,reasons) {
     const s=this.store.get(taskId).state;
@@ -403,15 +499,15 @@ export class TeamOrchestrator {
     await this.commit(taskId,[this.events("WAITING",{reasons})]);
   }
   async readFinalReceipt(s) {
-    const refs=finalFileRefs(s),reviewer=s.roles.reviewer;
+    const refs=finalFileRefs(s),reviewer=s.roles.reviewer,sender=s.roles.delivererId??reviewer;
     if(!refs.length||!reviewer)return null;
-    const dispatches=Object.values(s.dispatches).filter(d=>d.targetId===reviewer&&d.terminal?.status==="succeeded");
+    const dispatches=Object.values(s.dispatches).filter(d=>d.targetId===sender&&(!s.authSnapshots[s.activeAuthorizationId]?.jointReview||s.steps[d.stepId]?.authorizationId===s.activeAuthorizationId)&&d.terminal?.status==="succeeded"&&(!s.roles.delivererId||s.steps[d.stepId]?.purpose==="final-delivery"));
     const runIds=new Set(dispatches.map(d=>d.runId));
     const rows=this.svc.ledger.listLedger(s.roomId,{force:true,limit:Number.MAX_SAFE_INTEGER});
     const files=new Map();
     const expected=new Set((s.manifests[s.versionId]?.evidence??[]).filter(ref=>ref.kind==="file").map(ref=>ref.sha256));
     for(const row of rows){
-      if(row.type!=="deliverable"||row.botId!==reviewer||!runIds.has(row.runId))continue;
+      if(row.type!=="deliverable"||row.botId!==sender||!runIds.has(row.runId))continue;
       const writing=this.svc.finalDeliveryJournalWrites?.get(row.id);
       if(writing&&!(await writing).ok)continue;
       for(const file of row.files){
@@ -425,20 +521,42 @@ export class TeamOrchestrator {
       }
     }
     if(![...expected].every(hash=>files.has(hash)))return null;
-    const receipt={versionId:s.versionId,reviewerId:reviewer,files:[...files.values()]};
+    const receipt={versionId:s.versionId,reviewerId:reviewer,...s.roles.delivererId?{delivererId:sender}:{},files:[...files.values()]};
     this.deliveryReceipts.set(s.taskId,receipt);
     return receipt;
+  }
+  async restoreDeliveredFile(s,file){
+    const ref=finalFileRefs(s).find(ref=>ref.sha256===file.sha256&&basename(ref.name)===file.name);
+    const root=join(this.store.root,"deliveries",digest(s.taskId));
+    if(!ref||file.path!==join(root,s.versionId,ref.sha256,basename(ref.name)))throw Error("文件位置与签核清单不同");
+    const bytes=await this.store.readBlob(ref),temporary=file.path+"."+randomUUID()+".tmp";
+    await mkdir(resolve(file.path,".."),{recursive:true});
+    try{await writeFile(temporary,bytes,{flag:"wx",flush:true});await rename(temporary,file.path);}
+    finally{await unlink(temporary).catch(error=>{if(error.code!=="ENOENT")throw error;});}
+    if(fileSha256(await readFile(file.path))!==file.sha256)throw Error("签核文件回读失败");
   }
   async prepareDeliverables(input,runId,files) {
     const run=this.svc.state.runs.find(row=>row.id===runId);
     if(!this.managed(run))return files;
     const s=this.recordForRun(run).state,refs=finalFileRefs(s);
-    if(run.botId!==s.roles.reviewer||!refs.length||!this.canClaim(run))return files;
+    if(s.roles.assignment?.singleFile){
+      const valid=()=>{const a=this.documentAccess(run.sessionId);return a?.singleFile && a.dispatchId===run.dispatchId && a.operations.includes("deliver");};
+      if(!valid())throw Error("本单文件交付授权已失效");
+      const workspace=await this.documentDraftWorkspace(run.sessionId);
+      if(!workspace)throw Error("本单工作目录不可用");
+      const result=await pinSingleDeliverables(files,workspace,join(this.store.root,"deliveries",digest(s.taskId)),run.originMessageId);
+      if(!valid())throw Error("交付期间本单成员或派单已变化");
+      return result;
+    }
+    if(hasDocumentOrder(s)){const access=this.documentAccess(run.sessionId);if(!access||access.dispatchId!==run.dispatchId||!access.operations.includes("deliver")||!hasFinalSignatures(s))throw Error("本单当前成员尚未获准交付该版本");}
+    if(s.roles.delivererId && (!hasFinalSignatures(s)||s.steps[run.teamStepId]?.purpose!=="final-delivery"||run.botId!==s.roles.delivererId))throw Error("须由已登记的最终交付人在双签通过后的交付回合提交。");
+    if(run.botId!==(s.roles.delivererId??s.roles.reviewer)||!refs.length||!this.canClaim(run))return files;
     const completed=await this.readFinalReceipt(s);
     const hashByFile=await Promise.all(files.map(async file=>({file,sha256:fileSha256(await readFile(file.path))})));
     const matching=hashByFile.filter(row=>refs.some(ref=>ref.sha256===row.sha256));
+    if(s.roles.delivererId && (hashByFile.length!==refs.length || refs.some(ref=>!matching.some(row=>row.sha256===ref.sha256))))throw Error("交付文件与通过复核的完整版本不一致。");
     if(!matching.length)return files;
-    const staged=await stageVersionFiles(this.store,s,join(this.store.root,"deliveries"));
+    const staged=await stageVersionFiles(this.store,s,join(this.store.root,"deliveries",...(s.roles.delivererId?[digest(s.taskId)]:[])));
     if(!this.canClaim(run)||this.recordForRun(run).state.versionId!==s.versionId)
       throw Error("交稿期间成果版本或运行授权已更新，请核对当前版本");
     return hashByFile.flatMap(({file,sha256})=>{
@@ -458,9 +576,17 @@ export class TeamOrchestrator {
       steps:s.order.map(id=>{const p=s.steps[id],d=Object.values(s.dispatches).find(x=>x.attemptId===p.currentAttemptId);return {id,order:p.order,botId:p.targetId,status:p.status,runId:d?.runId,automaticRecoveryUsed:p.automaticRecoveries>0};}),
       missing:visible.missing,reviewReceipt:s.roles.confirmers?.length===2?this.review.feedback(record):null,consensus:s.versionId?{version:s.versionId,...s.manifests[s.versionId],required:s.roles.confirmers,confirmations:Object.values(s.confirmations)}:null};
     for(const h of Object.values(s.handoffs))if(h.textRef)this.handoffTextCache.set(h.id,JSON.parse((await this.store.readBlob(h.textRef)).toString()));
+    if(s.roles.unattended){
+      const goal=this.goalCache.get(s.taskId);
+      const revisions=record.events.filter(e=>(e.type==="ARTIFACT_CONFIRMED"&&e.payload.reviewDecision?.action==="revise")||["REVIEW_HANDOFF_RECOVERED","USER_DRAFT_SUBMITTED"].includes(e.type));
+      const decisions=record.events.filter(e=>e.payload.reviewDecision).map(e=>({actor:e.payload.targetId,...e.payload.reviewDecision}));
+      const requirements=await Promise.all(s.messages.map(async ref=>JSON.parse((await this.store.readBlob(ref)).toString()).text));
+      view.taskCard={origin:goal.id,owner:s.steps[s.currentStepId]?.targetId,drafts:revisions.length,requirements,decisions,
+        draftsText:await Promise.all(revisions.map(async e=>({version:e.payload.manifest.versionId,body:(await this.store.readBlob(e.payload.manifest.bodyRef)).toString()})))};
+    }
     const handoffs=Object.values(s.handoffs).map(h=>this.handoffView(s,h));
     this.svc.patchRoom(s.roomId,r=>({...r,teamTaskSchemaVersion:1,
-      ...(r.teamCurrentRequest?.taskId===s.taskId&&r.teamCurrentRequest?.messageId===s.activeAuthorizationId?{teamCurrentRequest:{...r.teamCurrentRequest,status:visible.status,revision:record.revision,reason:visible.missing[0]}}:{}),
+      ...(r.teamCurrentRequest?.taskId===s.taskId&&[s.activeAuthorizationId,s.authSnapshots[s.activeAuthorizationId]?.originalMessageId].includes(r.teamCurrentRequest?.messageId)?{teamCurrentRequest:{...r.teamCurrentRequest,status:visible.status,revision:record.revision,reason:visible.missing[0]}}:{}),
       mentionSequences:[...(r.mentionSequences??[]).filter(v=>v.taskKey!==s.taskId),view],
       mentionHandoffs:[...(r.mentionHandoffs??[]).filter(h=>h.taskKey!==s.taskId),...handoffs]}));
     // state.json is a rebuildable UI/run projection, never a dispatch authority.
@@ -484,7 +610,7 @@ export class TeamOrchestrator {
         s.roomId, d.targetId, s.roles.sessionScope === "task" ? s.taskId : undefined
       );
       const run={id:d.runId,botId:d.targetId,roomId:s.roomId,sessionId,origin:"user",publish:"visible",
-        originMessageId:s.roles.assignment?.sourceMessageId??d.authorizationId,mentionAuthorizedBy:d.authorizationId,authorizedMemberIds:s.authSnapshots[d.authorizationId]?.members??[],
+        originMessageId:(s.roles.writerFinalReview?Object.values(s.authSnapshots).find(auth=>auth.documentWorkOrder?.taskId===s.taskId)?.documentWorkOrder.origin:undefined)??s.roles.assignment?.sourceMessageId??s.authSnapshots[d.authorizationId]?.originalMessageId??d.authorizationId,mentionAuthorizedBy:d.authorizationId,authorizedMemberIds:s.authSnapshots[d.authorizationId]?.members??[],
         mentionTask:s.taskId,teamTaskId:s.taskId,teamStepId:d.stepId,dispatchId:d.dispatchId,ticketId:d.ticketId,attemptId:d.attemptId,
         ...(d.turn?.threadId?{upstream:{threadId:d.turn.threadId,turnId:d.turn.turnId,at:d.issuedAt}}:{}),
         mentionStepOrder:s.steps[d.stepId].order,prompt:this.renderPayload(payload),status:d.status==="pending"?"queued":"running",
@@ -545,48 +671,88 @@ export class TeamOrchestrator {
       });
     }
   }
-  async persistMessage(message){
-    if(!this.svc.state.messages.some(m=>m.id===message.id)){
-      if (message.sender.kind === "user") {
-        const previous = this.pendingChoiceId(this.svc.getRoom(message.roomId));
-        if (previous && previous !== message.id) this.closeChoice(message.roomId, previous, "superseded");
+  async persistMessage(message,{recover=false}={}){
+    const old=this.svc.state.messages.find(m=>m.id===message.id&&m.roomId===message.roomId);
+    let pendingFile;
+    if(!recover&&message.sender.kind==="user"&&this.opened&&!this.store.failed){
+      const dir=join(this.store.root,"message-outbox");
+      await mkdir(dir,{recursive:true});
+      pendingFile=join(dir,digest([message.roomId,message.id])+".json");
+      const temporary=pendingFile+"."+randomUUID()+".tmp";
+      try{
+        await writeFile(temporary,JSON.stringify(this.store.seal({message:old??message})),{flag:"wx",flush:true});
+        await rename(temporary,pendingFile);
+      }finally{await unlink(temporary).catch(error=>{if(error.code!=="ENOENT")throw error;});}
+    }
+    if(!old){
+      if(!recover&&message.sender.kind==="user"){
+        const previous=this.pendingChoiceId(this.svc.getRoom(message.roomId));
+        if(previous&&previous!==message.id)this.closeChoice(message.roomId,previous,"superseded");
       }
-      this.svc.state={...this.svc.state,messages:[...this.svc.state.messages,message]};await this.svc.flushNow();
-      this.svc.ledger.push({type:message.sender.kind==="user"?"user":"bot-text",roomId:message.roomId,text:message.text,senderName:message.sender.name,at:message.createdAt,messageId:message.id,presentation:message.presentation,runtime:message.runtime,...message.replyTo?{replyTo:message.replyTo}:{},...message.threadId?{threadId:message.threadId}:{},...message.attachments?{attachments:message.attachments}:{},...message.runId?{runId:message.runId,botId:message.sender.botId}:{} });
-    }return message;
+      this.svc.state={...this.svc.state,messages:[...this.svc.state.messages,message]};
+    }
+    // An earlier flush can have failed after the in-memory insert. Retry the same projection.
+    await this.svc.flushNow();
+    const row=old??message, user=row.sender.kind==="user";
+    const visible=this.svc.ledger.listLedger(row.roomId,{force:true,limit:Number.MAX_SAFE_INTEGER});
+    if(!visible.some(e=>e.messageId===row.id&&e.type===(user?"user":"bot-text"))){
+      this.svc.ledger.push({type:user?"user":"bot-text",roomId:row.roomId,text:row.text,senderName:row.sender.name,
+        at:row.createdAt,messageId:row.id,presentation:row.presentation,runtime:row.runtime,replyTo:row.replyTo,
+        threadId:row.threadId,attachments:row.attachments,runId:row.runId,botId:row.sender.botId});
+    }
+    if(pendingFile)await unlink(pendingFile).catch(error=>{if(error.code!=="ENOENT")throw error;});
+    return row;
   }
   async send(input, original) {
     if(this.svc.writesBlocked)throw Error("群聊记录不可写");
     const room=this.svc.getRoom(input.roomId);
     if(!room||typeof input.text!=="string")throw Error("群聊或消息无效");
     const id=requestMessageId(room.id,input.requestId)??randomUUID();
+    const requestHash=input.requestId && digest({text:input.text,mentions:input.mentions??[],replyTo:input.replyTo,threadId:input.threadId,taskId:input.taskId,continueTaskId:input.continueTaskId,action:input.submissionAction??"chat",attachments:input.attachments??[]});
     const duplicate=this.svc.state.messages.find(m=>m.id===id&&m.roomId===room.id&&m.sender.kind==="user");
     if(duplicate){
+      if(duplicate.requestHash && duplicate.requestHash!==requestHash)throw Error("同一请求标识不能更改附件、点名、引用或操作");
+      if(managedGroup(room) && (input.submissionAction??"chat")!==(duplicate.submissionAction??"chat"))throw Error("同一消息请求标识不能用于两类操作");
       if(duplicate.text!==input.text)throw Error("同一个消息请求标识不能用于不同正文");
+      await this.persistMessage(duplicate,{recover:true});
       if(duplicate.runtime==="chat")await this.chat.schedule(duplicate);
       if(duplicate.memberAssignments?.length)await this.assignments.schedule(duplicate);
       if(duplicate.reviewReturn&&!duplicate.reviewAlias&&!duplicate.taskActionError&&!duplicate.requestError)await this.review.process(duplicate);
       return duplicate;
     }
-    const {roster,authored,ids:explicit,mentioned:members,unknown:unresolvedMention,reference,invalid:invalidReference,body,decision:classified}=this.followup.classify(room,input);
+    const {roster,authored,ids:explicit,mentioned:members,unknown:unresolvedMention,reference,invalid:invalidReference,body,decision:classified}=this.followup.classify(room,input,undefined,!original);
     let decision=original?{intent:"create",basis:"转为任务"}:classified;
+    const explicitRoom=managedGroup(room) && !original;
+    const action=input.submissionAction??"chat";
+    if (explicitRoom && !["chat","delegate-document","append-document","review-document"].includes(action)) throw Error("未知群消息操作");
+    if (explicitRoom) {
+      if (action==="append-document" || action==="review-document") {
+        if(!input.taskId || !reference || reference.taskRef!==input.taskId || reference.sender?.kind!=="user") throw Error("从原任务卡操作才能关联该任务");
+        decision={intent:action==="append-document"?"append":"review",basis:body};
+      }
+    }
     const everyone=authored.who==="everyone";
-    const assignments=!original&&(everyone||explicit.length>1)&&["chat","ordered-chat","create"].includes(decision.intent)&&
+    const assignments=explicitRoom?null:decision.sequentialAssignments?{assignments:decision.sequentialAssignments}:!original&&!decision.delivery&&(everyone||explicit.length>1)&&["chat","ordered-chat","create"].includes(decision.intent)&&
       parseMemberAssignments(everyone?body:(authored.authoredText??input.text),roster);
-    if(assignments)decision={intent:"create",basis:"成员明确分工"};
+    if(assignments&&!decision.sequentialMembers)decision={intent:"create",basis:"成员明确分工"};
     const at=now();
     const message={
-      id,roomId:room.id,sender:{kind:"user",name:input.senderName??"user"},text:input.text,mentions:members,
+      ...(explicitRoom?{submissionAction:action,routingVersion:3}:{}),...(requestHash?{requestHash}:{}),id,roomId:room.id,sender:{kind:"user",name:input.senderName??"user"},text:input.text,mentions:explicitRoom&&!everyone?explicit:members,
       authorizationSnapshot:{messageId:id,members,at},createdAt:at,sequence:this.svc.state.messages.filter(m=>m.roomId===room.id).length,
       ...reference&&input.replyTo?{replyTo:reference.id}:{},
       ...!invalidReference&&input.threadId?{threadId:input.threadId}:{},
       routeDecision:{...decision,referenceId:reference?.id??null}
     };
-    const attachments=original?.attachments??(await this.svc.storeMessageAttachments(input.attachments,room))?.stored
+    const attachments=original?.attachments??(await this.svc.storeMessageAttachments(input.attachments,decision.intent==="single-file"?{...room,memberIds:[decision.recipientId]}:room))?.stored
       .map(f=>({name:f.name,size:f.bytes,mime:f.mime,path:f.path}));
     if(attachments?.length)message.attachments=attachments;
     if(["chat","ordered-chat","progress"].includes(decision.intent)){
       this.chat.prepare(room,message,{...authored,ids:explicit},members,reference,decision,unresolvedMention||invalidReference);
+      if(decision.semanticScope&&!message.chatPlan.reason){
+        const scope=decision.semanticScope;
+        message.chatPlan={...message.chatPlan,targets:[scope.first],allowance:1,ordered:false,recipientSource:"user-conditional",semanticScope:scope};
+        message.authorizationSnapshot={...message.authorizationSnapshot,members:[scope.first]};
+      }
       await this.persistMessage(message);
       await this.chat.schedule(message);
       return message;
@@ -598,9 +764,31 @@ export class TeamOrchestrator {
       if(unresolvedMention)throw Error("点名无法核实，请重新点名当前成员");
       if(room.paused&&!["stop"].includes(decision.intent))throw Error("群聊已暂停，请在启用后重新授权");
       this.assert();
+      if(explicitRoom && (action==="append-document"||action==="review-document" || reference?.taskRef && ["append","review"].includes(decision.intent))){
+        const anchored=this.store.get(input.taskId??reference.taskRef);
+        if(!anchored||anchored.state.roomId!==room.id||this.goalCache.get(anchored.taskId)?.id!==reference?.id)throw Error("任务与当前原消息不一致");
+        if(action==="review-document" && input.attachments?.length)return await this.registerUserDraft(room,message,input);
+        if(decision.intent==="review" && anchored.state.status==="completed"){
+          message.routeDecision.jointMembers=anchored.state.roles.confirmers;
+          return await beginJointReview(this,room,message,anchored);
+        }
+        this.authorizeAction(message,anchored);message.taskRef=message.mentionTask=anchored.taskId;
+        await this.persistMessage(message);await this.applyRequestAction(message,anchored);return message;
+      }
+      if(decision.intent==="single-file"){
+        const botId=decision.recipientId;
+        if(explicit.length!==1 || explicit[0]!==botId)throw Error("单人文件委托需要一位有效的被点名成员");
+        message.fileSources=attachedDocumentSources(input.attachments,message.attachments);
+        return await this.assignments.create(room,message,{assignments:[{botId,work:message.text,verb:"制作文件",dependsOn:[],singleFile:true}]});
+      }
+      if(decision.jointMembers){
+        const reviewed=await matchedReview(this,message,reference);
+        if(reviewed)return await beginJointReview(this,room,message,reviewed);
+        if(decision.documentReview)throw Error("未能唯一核对待审方案，请引用对应的已交付原件。");
+      }
       if(decision.intent==="return-review")return await this.followup.apply(room,message,input,reference);
       if(decision.intent==="close-thread")return await this.threadCloser.prepare(room,message,input);
-      if(decision.intent==="create")return await this.createFromMessage(room,message,roster,authored,original,assignments);
+      if(decision.intent==="create")return await this.createFromMessage(room,message,roster,authored,original,assignments,input.attachments);
       const candidates=this.taskCandidates(room.id,{...input,text:decision.basis,memberTargets:explicit,actionIntent:decision.intent},decision.intent!=="resume");
       if(!candidates.length)throw Error("未找到可核验的原任务，请引用任务原消息");
       if(candidates.length===1){
@@ -610,7 +798,7 @@ export class TeamOrchestrator {
         await this.persistMessage(message);
         await this.applyRequestAction(message,record);
       }else {
-        if(decision.intent!=="resume")throw Error("请回复要操作的那条原任务消息。");
+        if(!["resume","append"].includes(decision.intent))throw Error("请回复要操作的那条原任务消息。");
         const previous=this.pendingChoiceId(this.svc.getRoom(room.id));
         if(previous)this.closeChoice(room.id,previous,"superseded");
         message.continuationCandidates=candidates.map(record=>this.choiceView(record));
@@ -624,6 +812,7 @@ export class TeamOrchestrator {
         await this.persistMessage(message);
       }
     } catch(error) {
+      if(["EPERM","EBUSY","EACCES"].includes(error.code))throw error;
       message.requestError=String(error?.message??error);
       await this.persistMessage(message);
       await this.markRequestFailed(message,error);
@@ -633,36 +822,42 @@ export class TeamOrchestrator {
     return message;
   }
 
-  async createFromMessage(room,message,roster,authored,original,assignments){
+  async createFromMessage(room,message,roster,authored,original,assignments,uploaded){
     if(assignments)return this.assignments.create(room,message,assignments);
     const rolePlan=this.helpers.parseRoles(maskGroupLinks(message.text),roster),saved=this.svc.teamWorkflowFor(room);
     const eligible=this.currentMembers(room.id);
-    const members=message.mentions.length?message.mentions:!room.mentionOnly?[
+    const plan=message.routeDecision.documentPlan;
+    const configured=!plan && message.routeDecision.explicitWorkOrder && saved && [saved.firstBotId??saved.memberIds[0],saved.reviewerId];
+    if(configured && (new Set(configured).size!==2||!configured.every(id=>eligible.includes(id))))throw Error("群内主笔和复核分工已失效，请检查群设置");
+    const pair=plan?[plan.writer,plan.reviewer]:message.routeDecision.sequentialMembers??message.routeDecision.jointMembers??(message.routeDecision.delivery?deliveryPair(room,roster,eligible,saved,message,rolePlan):null)??(configured||null);
+    if(message.routeDecision.explicitWorkOrder&&!pair)throw Error("请先在群设置登记主笔和复核成员");
+    const members=plan?[...new Set([plan.writer,plan.reviewer,plan.deliverer])]:pair??(message.mentions.length?message.mentions:!room.mentionOnly?[
       ...new Set([...(saved?.memberIds??[]),this.svc.leaderOfRoom(room.id)])
-    ].filter(id=>eligible.includes(id)):[];
+    ].filter(id=>eligible.includes(id)):[]);
     if(!members.length)throw Error("请点名可执行这项任务的成员");
     const explicit=(rolePlan?.sequence??authored.sequence)?.filter(id=>members.includes(id));
     const savedPair=saved && members.includes(saved.firstBotId ?? saved.memberIds[0]) && members.includes(saved.reviewerId);
-    if(authored.who!=="everyone" && members.length>1 && !explicit?.length && !savedPair){
+    if(!pair && authored.who!=="everyone" && members.length>1 && !explicit?.length && !savedPair){
       const work=message.routeDecision.basis;
       return this.assignments.create(room,message,{assignments:members.map(botId=>({botId,work,dependsOn:[]}))});
     }
-    const order=members.length===1?members:explicit?.length?explicit:
-      [...new Set([saved?.firstBotId,...(saved?.memberIds??[]),...members])].filter(id=>members.includes(id)&&id!==saved?.supervisorId);
+    const order=pair??(members.length===1?members:explicit?.length?explicit:
+      [...new Set([saved?.firstBotId,...(saved?.memberIds??[]),...members])].filter(id=>members.includes(id)&&id!==saved?.supervisorId));
     if(!order.length)order.push(...members);
-    const reviewer=[rolePlan?.reviewerId,saved?.reviewerId,order[1]].find(id=>id!==order[0]&&members.includes(id))??null;
+    const reviewer=pair?.[1]??[rolePlan?.reviewerId,saved?.reviewerId,order[1]].find(id=>id!==order[0]&&members.includes(id))??null;
     const supervisor=[rolePlan?.supervisorId,saved?.supervisorId].find(id=>members.includes(id))??null;
-    if(rolePlan?.sequence?.length>1&&reviewer&&rolePlan.reviewerId===reviewer)await this.svc.updateRoom({id:room.id,
+    if(!pair&&rolePlan?.sequence?.length>1&&reviewer&&rolePlan.reviewerId===reviewer)await this.svc.updateRoom({id:room.id,
       ...(members.includes(rolePlan.leaderId)?{leaderBotId:rolePlan.leaderId}:{}),
       teamWorkflow:{mode:"until-final-review",firstBotId:order[0],reviewerId:reviewer,memberIds:order,...supervisor?{supervisorId:supervisor}:{}}
     });
     const reviewFirstResult=members.length>1 && !!saved && !!reviewer &&
       order[0]===(saved.firstBotId??saved.memberIds[0]) && reviewer===saved.reviewerId;
-    const roles={...(reviewer?{reviewProtocol:2}:{}),sessionScope:"task",handoffFiles:"named",first:order[0],reviewer,supervisor,order,confirmers:reviewer?[order[0],reviewer]:[],
+    const roles={...(plan?{writerFinalReview:true,delivererId:plan.deliverer}:reviewer&&[order[0],reviewer].includes(saved?.delivererId)?{delivererId:saved.delivererId}:{}),...(pair?{unattended:true}:{}),...(reviewer?{reviewProtocol:2}:{}),sessionScope:"task",handoffFiles:"named",first:order[0],reviewer,supervisor,order,confirmers:reviewer?[order[0],reviewer]:[],
       ...(reviewFirstResult?{reviewFirstResult:true}:{})};
     const taskId="thread:"+(original?.id??message.id);
     message.taskRef=taskId;message.mentionTask=taskId;
     message.authorizationSnapshot={...message.authorizationSnapshot,members};
+    if(message.routeDecision.explicitWorkOrder) message.authorizationSnapshot.documentWorkOrder={taskId,roomId:room.id,origin:message.id,writer:roles.first,reviewer:roles.reviewer,deliverer:roles.delivererId??roles.reviewer};
     const existing=this.store.get(taskId);
     if(existing?.revision){
       if(existing.state.roomId!==room.id)throw Error("任务所属群聊不符");
@@ -672,10 +867,14 @@ export class TeamOrchestrator {
       this.setCurrentRequest(room.id,message.id,existing);
       await this.svc.flushNow();return message;
     }
-    const ref=await this.store.putBlob(message,"json");
+    const inputs=plan&&roles.unattended&&message.attachments?.length ? attachedDocumentSources(uploaded,message.attachments) : [];
+    const ref=await this.store.putBlob(inputs.length ? {...message,attachedDocumentSources:inputs} : message,"json");
     const created=this.events("TASK_CREATED",{roomId:room.id,authorization:message.authorizationSnapshot,permissions:eligible,roles,goalRef:ref,messageRef:ref});
-    const initial=apply(emptyState(taskId),{...created,taskId}),plan=await this.buildPlan(initial,order[0]);
-    const record=await this.store.create(taskId,[created,...plan.events]);
+    const initial=apply(emptyState(taskId),{...created,taskId});
+    const missing=plan&&roles.unattended&&message.routeDecision.delivery
+      ? await documentPreflight(this.svc,initial) : [];
+    const events=missing.length?[this.events("WAITING",{reasons:missing})]:(await this.buildPlan(initial,order[0])).events;
+    const record=await this.store.create(taskId,[created,...events]);
     await this.persistMessage(message);
     await this.project(record);
     this.setCurrentRequest(room.id,message.id,record);
@@ -689,7 +888,7 @@ export class TeamOrchestrator {
     const current=this.currentMembers(message.roomId);
     const prior=effectiveMembers({...state,permissions:current});
     const allowed=state.roles.assignment&&intent!=="stop"?[state.roles.assignment.botId]:null;
-    const members=(explicit.length?explicit:prior).filter(id=>current.includes(id)&&(intent==="resume"||prior.includes(id))&&(!allowed||allowed.includes(id)));
+    const members=(state.roles.unattended&&intent==="append"?prior:explicit.length?explicit:prior).filter(id=>current.includes(id)&&(intent==="resume"||prior.includes(id))&&(!allowed||allowed.includes(id)));
     if(!members.length)throw Error("操作缺少有效的用户授权，请重新点名");
     if(intent==="review"&&!members.includes(state.roles.reviewer))throw Error("请明确授权原任务的复核成员");
     message.authorizationSnapshot={...message.authorizationSnapshot,members};
@@ -753,7 +952,7 @@ export class TeamOrchestrator {
         if(this.assignments.reply(r))return false;
       }
       if(explicit&&r.taskId!==explicit&&r.taskId!=="task:"+explicit&&assignment?.batchTaskId!==explicit)return false;
-      if(reference&&(!selected||(r.taskId!==selected.taskRef&&r.taskId!==selected.mentionTask&&
+      if(reference&&(!selected||(r.taskId!==selected.taskRef&&r.taskId!==selected.mentionTask&&r.taskId!==this.svc.state.runs.find(run=>run.roomId===roomId&&run.id===selected.runId)?.teamTaskId&&
         (!assignment||assignment.batchTaskId!==selected.taskRef)&&!state.authSnapshots[selected.id])))return false;
       if(explicit||reference||activeOnly)return true;
       return state.status!=="completed"||!!this.resumeKind(state)||refersFirst;
@@ -797,6 +996,13 @@ export class TeamOrchestrator {
       const r=this.store.get(taskId);
       if(!r||r.state.roomId!==message.roomId)throw Error("原任务在本群不可用");
       const s=r.state,step=s.steps[s.currentStepId];
+      const lastWait = s.status==="stopped" ? r.events.findLast(e=>e.type==="WAITING")?.payload.reasons : s.missing;
+      const refused = lastWait?.some(text=>text.startsWith("宿主审批阻塞（"));
+      if((hasDocumentOrder(s)) && s.roles.unattended &&
+          ["stopped","pending-review"].includes(s.status) && (refused || lastWait?.some(text=>text.startsWith(preflightPrefix)))){
+        const missing=await documentPreflight(this.svc,{...s,permissions:this.currentMembers(s.roomId)},refused);
+        if(missing.length)throw Error(missing.join(" "));
+      }
       if(s.authSnapshots[message.id])return this.response(r,message.id,{alreadySelected:true});
       if(s.status==="stopping")throw Error("原回合正在停止，等待同一回合的上游终态回执");
       if(s.roles.kind==="ordered-chat"&&!live(s))throw Error("这轮接话已结束，请直接发下一条消息");
@@ -810,6 +1016,11 @@ export class TeamOrchestrator {
         await this.readFinalReceipt(s);
         if(!this.signatureDeliveryNeeded(s))throw Error("原文件卡片已核实，任务已交稿");
         recover={kind,versionId:s.versionId};
+      }else if(resumeStopped && s.status==="stopped" && s.roles.unattended && s.versionId && Object.keys(s.confirmations).length){
+        const manifest=s.manifests[s.versionId];
+        if(!manifest || digest((await this.store.readBlob(manifest.bodyRef)).toString())!==manifest.bodyHash)throw Error("原稿版本核对失败");
+        for(const ref of finalFileRefs(s))await this.store.readBlob(ref);
+        recover={kind:"signed-resume",versionId:s.versionId};
       }else if(kind==="legacy-cap"){
         recover=await recoverLegacyCap(this.legacyCapped.get(taskId),s,this.store,this.svc);
       }
@@ -823,6 +1034,14 @@ export class TeamOrchestrator {
       const last=step&&s.dispatches[step.attempts[step.currentAttemptId]?.dispatchId];
       const resume=last&&this.review.missingDecision(r,last)&&members.includes(last.targetId)?{...this.review.versionFor(s,last),targetId:last.targetId}:null;
       const carried=s.authSnapshots[step?.authorizationId]?.reviewOffer;
+      if(s.roles.unattended&&message.routeDecision?.intent==="append"){
+        const event=this.events("REQUIREMENTS_UPDATED",{messageRef:await this.store.putBlob(message),authorization:{...authorization,members},previousVersion:s.versionId},"requirements:"+message.id);
+        const next=apply(s,{...event,taskId});
+        const plan=await this.buildPlan(next,s.roles.first,[],{purpose:"revision",previous:last?.terminal?.outputRef});
+        await this.commit(taskId,[event,...plan.events],r.revision);
+        this.svc.executor?.nudge();
+        return this.response(this.store.get(taskId),message.id,{runId:plan.dispatchId});
+      }
       const event=this.events("USER_AUTHORIZED",{authorization:{...authorization,members,...(resume?{reviewResume:resume}:{}),...(carried&&!carried.sourceVersion&&!s.versionId?{reviewOffer:carried}:{})},recover,returnHandoffs,
         messageRef:await this.store.putBlob(message),resumeStopped});
       const prospective=apply({...s,permissions:this.currentMembers(s.roomId)},{...event,taskId});
@@ -844,9 +1063,10 @@ export class TeamOrchestrator {
             payloadRef:previous.payloadRef,source:"manual",safeToRetry:true}));
           runId=dispatchId;
         }else{
-          const nextSignature=prospective.versionId&&(prospective.roles.confirmers??[]).find(id=>
+          const order=prospective.roles.writerFinalReview?[prospective.roles.reviewer,prospective.roles.first]:prospective.roles.confirmers??[];
+          const nextSignature=prospective.versionId&&order.find(id=>
             !signatureVerified(prospective,id)&&members.includes(id));
-          const target=needsDelivery?prospective.roles.reviewer:
+          const target=needsDelivery?(prospective.roles.delivererId??prospective.roles.reviewer):
             (preferTarget&&members.includes(fallback)?fallback:unfinishedReview??eligible?.targetId)??(nextSignature||null)??(members.includes(fallback)?fallback:members.includes(step?.targetId)?step.targetId:members[0]);
           if(!members.includes(target))throw Error("交稿成员没有获本次点名授权，请点名终审成员");
           if(requirePending&&handoffs.length&&!eligible)throw Error("剩余待办接收方不在原授权范围，请重新点名");
@@ -968,15 +1188,42 @@ export class TeamOrchestrator {
       }handoffs.push({id,targetId,text,evidence,acceptedRunId:h.acceptedRunId??null});}
     const current=s.messages.at(-1)?JSON.parse((await this.store.readBlob(s.messages.at(-1))).toString()):goal;
     const reviewer=targetId===s.roles.reviewer;
-    const finalDelivery=reviewer&&requiresFinalDelivery(s)?{
+    const finalDelivery=!s.roles.unattended&&reviewer&&requiresFinalDelivery(s)?{
       versionId:s.versionId,
       alreadyConfirmed:signatureVerified(s,targetId),
       files:await stageVersionFiles(this.store,s,join(this.svc.runWorkspaceDir(targetId),"handoffs","signed-versions"))
     }:null;
+    if(s.roles.delivererId&&purpose==="final-delivery"){
+      if(targetId!==s.roles.delivererId||!hasFinalSignatures(s))throw Error("尚不能派发最终交付");
+      const files=await stageVersionFiles(this.store,s,join(this.svc.runWorkspaceDir(targetId),"handoffs","signed-versions"));
+      return {purpose,taskId:s.taskId,role:"交付",originalRequirement:goal.text,versionId:s.versionId,files,instruction:"你是本次选定的最终交付人。主笔与复核已签署同一版本。现在用 agent_community_deliver 提交 files 所列签核文件，收到成功回执再结束。"};
+    }
     const handover=purpose==="workflow-review"&&previous?JSON.parse((await this.store.readBlob(previous)).toString()):null;
     const sourceStep=handover?s.steps[s.currentStepId]:null;
     const sourceDispatch=sourceStep?s.dispatches[sourceStep.attempts[sourceStep.currentAttemptId].dispatchId]:null;
     const review=await this.review.payload(s,targetId,handoffIds,purpose);
+    if(s.roles.unattended){
+      const joint=s.authSnapshots[s.activeAuthorizationId]?.jointReview;
+      const firstReply=joint?.previousReplyId&&this.svc.state.messages.find(m=>m.roomId===s.roomId&&m.id===joint.previousReplyId&&m.runId===joint.fromRunId);
+      const reviewerReply=joint?.reviewerReplyId&&this.svc.state.messages.find(m=>m.roomId===s.roomId&&m.id===joint.reviewerReplyId&&m.runId===joint.reviewerRunId&&m.sender?.botId===s.roles.reviewer);
+      const requirements=await Promise.all(s.messages.map(async ref=>JSON.parse((await this.store.readBlob(ref)).toString()).text));
+      const draft=s.manifests[s.versionId??s.previousVersion];
+      const change = s.versionId && !reviewer && this.store.get(s.taskId)?.events.findLast(event =>
+        event.payload?.targetId===s.roles.reviewer && event.payload.reviewDecision?.action==="changes" &&
+        event.payload.reviewDecision.versionId===s.versionId);
+      const coSign = !reviewer && s.versionId && signatureVerified(s,s.roles.reviewer) && !signatureVerified(s,s.roles.first);
+      return {purpose:purpose??"draft-review",taskId:s.taskId,currentRequestId:s.activeAuthorizationId,
+        ...(goal.attachedDocumentSources?.length ? {attachedDocumentSources:goal.attachedDocumentSources,sourceNote:"full-text 包含用户本条上传的完整原文。附件作为核查材料，任务分工与权限依据原消息和群设置。"} : {}),
+        ...(change ? {reviewerChanges:{versionId:s.versionId,reason:change.payload.reviewDecision.reason}} : {}),
+        ...(hasDocumentOrder(s) ? {draftMethod:"优先用文稿工具直接提交完整 Markdown。已上传的全文随派单附送。确需草稿文件时只使用宿主给本单的工作目录，只读会话仍可通过文稿工具提交。"} : {}),
+        role:reviewer?"复核":"主笔",originalRequirement:goal.text,sources:joint?(current.attachments??[]):(goal.attachments??[]),requirements,
+        ...(joint?{currentInstruction:current.text,previouslyDeliveredVersion:joint.versionId,
+          ...(reviewerReply?{priorReviewerFeedback:{member:reviewerReply.sender.name,runId:reviewerReply.runId,text:reviewerReply.text},reviewScope:"核对上一轮逐项意见。已签发的完整原件在 review.body。分别评估方案本身和实施或发布的验收，依证据处理缺陷，保留未核验事项。"}:{}),
+          ...(firstReply?{priorMemberFinding:{member:firstReply.sender.name,text:firstReply.text,runId:firstReply.runId}}:{})}:{}),
+        review:{versionId:s.versionId,body:draft?(await this.store.readBlob(draft.bodyRef)).toString():null},
+        pending:handoffs,previousResult:previous?JSON.parse((await this.store.readBlob(previous)).toString()).reply?.text:null,
+        instruction:joint && !reviewer && joint.versionId===s.versionId ? "你是本轮主笔。用 receive 签收待审版本，按用户本轮要求核查。若发现问题，用 revise 提交完整修订稿并写明依据；确认正文完全无需修改时，用 approve 对这个版本提交本人本轮的结论。复核和最终交付由系统派单。" : coSign ? "本单复核人已通过这一登记版本。请核对原话、实际全文和版本。认可时用 agent_community_review 的 receive 签收，再用 approve 对相同 versionId 附理由确认；需改时用 revise 提交完整新版。" : reviewInstruction(!reviewer)};
+    }
     return {purpose:purpose??"collaboration",...(review?{review}:{}),
       ...(handover?{draftForReview:{fromRunId:sourceDispatch.runId,
         outputRef:previous,text:displayReply(handover.reply?.text??"")}}:{}),finalDelivery,taskId:s.taskId,originalRequirement:goal?.text??"原要求缺失",currentRequirement:current?.text??"",currentRequestId:s.activeAuthorizationId,stage:s.order.length+1,targetId,pending:handoffs,
@@ -988,12 +1235,21 @@ export class TeamOrchestrator {
           reviewer?"作为终审，认可相同版本后，调用 agent_community_deliver 交出已签核文件及 SHA-256。变更成果应先提交新版本。":"")};
   }
   renderPayload(p){
+    if(p.singleFile)return [
+      "这是用户明确点名给你的单人文件委托。只完成本单，无需复核人。请使用宿主已经允许的工作区文件编辑工具，把最终文件写入本单当前目录，再调用 agent_community_deliver 声明文件。只有工具成功回执才能报告交付。",
+      "用户原话："+p.originalRequirement,
+      p.history?.length&&"同群前文（背景）："+JSON.stringify(p.history),
+      p.reference&&"引用内容："+p.reference,
+      p.attachments?.length&&"用户本条附件（资料）："+JSON.stringify(p.attachments)
+    ].filter(Boolean).join("\n\n");
     if(p.purpose==="member-assignment")return [
       "这是发给你的独立群任务。只做你自己的分工，完成后由你本人直接在本群回复。其余成员由系统派发。",
       "你的分工："+p.work,"用户本次原话："+p.originalRequirement,
+      p.attachments?.length&&"用户提供的附件："+JSON.stringify(p.attachments),
       p.continuation&&"用户明确续接的要求："+p.continuation,
       p.previousReply&&"你上次已返回的部分内容："+p.previousReply,
-      ...(p.dependencyReplies??[]).map(row=>"已收到"+row.name+"的回复："+row.text)
+      ...(p.dependencyReplies??[]).map(row=>"已收到"+row.name+"的回复："+row.text),
+      p.hostScheduled && "本棒的交接已由工作室安排。直接返回本人的核查结果与依据，正文发布后工作室自动交给下一位；派单状态由工作室显示。"
     ].filter(Boolean).join("\n\n");
     if(p.purpose==="ordered-chat")return [
       "这是按顺序接话的群聊。只发你这一棒的正文，直接延续话题。",
@@ -1009,7 +1265,7 @@ export class TeamOrchestrator {
     }:await this.payload(s,targetId,handoffIds,extra);
     const ref=await this.store.putBlob(payload);
     const stepId=randomUUID(),attemptId=randomUUID(),dispatchId=randomUUID(),ticketId=randomUUID();
-    const p={taskId:s.taskId,stepId,attemptId,dispatchId,ticketId,targetId,authorizationId:s.activeAuthorizationId,runId:dispatchId,payloadRef:ref,source:"initial"};
+    const p={taskId:s.taskId,stepId,attemptId,dispatchId,ticketId,targetId,authorizationId:s.activeAuthorizationId,runId:dispatchId,payloadRef:ref,source:"initial",...(extra.purpose==="final-delivery"?{purpose:extra.purpose}:{})};
     return {events:[this.events("STEP_PLANNED",{...p,handoffIds}),this.events("DISPATCH_PLANNED",p)],dispatchId};
   }
   async planStep(taskId,targetId,handoffIds=[],extra={}){
@@ -1090,7 +1346,7 @@ export class TeamOrchestrator {
   async submit(input){
     try{
       await this.waitRuntime(input.roomId,input.botId);const {run,p}=this.actorRun(input.roomId,input.botId);return await this.serial(run.teamTaskId,async()=>{
-        const s=this.recordForRun(run).state;if(!this.svc.getRoom(input.roomId).memberIds.includes(input.targetId))throw Error("目标不在本群");
+        const s=this.recordForRun(run).state;if(s.roles.unattended&&!s.roles.confirmers.includes(input.targetId))throw Error("本任务只在已确定的主笔和复核人之间流转，请使用本棒复核工具");if(!this.svc.getRoom(input.roomId).memberIds.includes(input.targetId))throw Error("目标不在本群");
         const evidenceRefs=[];
         if(input.path){
           const plan=await this.helpers.planFileHandoff({senderWorkspace:this.svc.runWorkspaceDir(input.botId),targetWorkspace:this.svc.runWorkspaceDir(input.targetId),sourcePath:input.path});
@@ -1126,6 +1382,7 @@ export class TeamOrchestrator {
   async confirm(input){
     try{
       await this.waitRuntime(input.roomId,input.leaderId);const {run,p}=this.actorRun(input.roomId,input.leaderId);
+      if(this.recordForRun(run)?.state.roles.unattended)throw Error("本次方案请使用 agent_community_review 提交完整稿或对本轮版本签核");
       const refs=[];
       for(const evidence of input.evidence??[]){
         if(evidence.kind==="file"){
@@ -1233,13 +1490,39 @@ export class TeamOrchestrator {
     return actual?.acceptedDispatchId?name+"已签收，缺本人对这版的复核意见。可继续原任务补交。":
       name+"这一棒已结束，缺本人签收。可在原单继续签收，或明确把已交的新版派回复核。";
   }
+  async registerUserDraft(room,message,input) {
+    const id=input.taskId;
+    return this.serial(id,async()=>{
+      const record=this.store.get(id),s=record?.state;
+      if(!s||s.roomId!==room.id||s.stop||s.status!=="pending-review"||s.versionId||
+          Object.values(s.handoffs).some(h=>!["resolved","revoked"].includes(h.status)) ||
+          Object.values(s.dispatches).some(d=>!["terminal","revoked"].includes(d.status))) throw Error("原单已有待办、版本或在途派单，请使用普通返审");
+      const goal=JSON.parse((await this.store.readBlob(s.goalRef)).toString());
+      if(goal.id!==input.replyTo||goal.sender.kind!=="user"||s.roles.confirmers?.length!==2)throw Error("原任务与复核分工不符");
+      const members=s.roles.confirmers;
+      if(!members.every(m=>this.currentMembers(room.id).includes(m)&&effectiveMembers(s).includes(m)))throw Error("原任务成员授权已变化");
+      const inputs=attachedDocumentSources(input.attachments,message.attachments);
+      if(inputs.length!==1||inputs[0].readMode!=="full-text"||inputs[0].text.trim().length<16)throw Error("请附上一份可完整回读的 UTF-8 待审稿");
+      const draft=await this.review.draft(inputs[0].text);
+      const auth={...message.authorizationSnapshot,members,originalMessageId:goal.id,documentWorkOrder:{
+        taskId:id,roomId:room.id,origin:message.id,writer:s.roles.first,reviewer:s.roles.reviewer,deliverer:s.roles.delivererId??s.roles.reviewer
+      },reviewOffer:{...draft,targetId:s.roles.reviewer,requestId:message.id}};
+      message.taskRef=message.mentionTask=id;message.authorizationSnapshot=auth;
+      const messageRef=await this.store.putBlob(message,"json");
+      const e=this.events("USER_DRAFT_SUBMITTED",{authorization:auth,messageRef,sourceName:inputs[0].name,sourceHash:inputs[0].sha256,manifest:draft.manifest,refs:draft.refs},"user-draft:"+message.id);
+      const next=apply(s,{...e,taskId:id});
+      const plan=await this.buildPlan(next,s.roles.reviewer,[],{purpose:"return-review"});
+      await this.commit(id,[e,...plan.events],record.revision);await this.persistMessage(message);
+      this.setCurrentRequest(room.id,message.id,this.store.get(id));await this.svc.flushNow();this.svc.executor?.nudge();return message;
+    });
+  }
   async advance(taskId){
     const state=this.store.get(taskId)?.state;
     if(state?.roles.assignment)return this.assignments.schedule(this.assignments.origin(state));
     return this.serial(taskId,async()=>{
       let r=this.store.get(taskId),s=r.state;if(!live(s)||s.status==="stopping"||!s.currentStepId)return;
       const step=s.steps[s.currentStepId];if(!ended(step.status))return;
-      if(await this.review.beforeAdvance(r))return;
+      if(!s.roles.unattended&&await this.review.beforeAdvance(r))return;
       const request=this.svc.state.messages.find(row=>row.roomId===s.roomId&&row.sender.kind==="user"&&row.taskRef===taskId&&
         ["append","review"].includes(row.routeDecision?.intent)&&!row.taskActionError&&!s.authSnapshots[row.id]);
       if(request){
@@ -1255,6 +1538,11 @@ export class TeamOrchestrator {
         }
       }
       const d=Object.values(s.dispatches).find(d=>d.attemptId===step.currentAttemptId);
+      if (s.roles.unattended && d?.terminal && !r.events.some(e=>e.payload.dispatchId===d.dispatchId && e.payload.reviewDecision) &&
+          !(step.purpose==="final-delivery" && await this.readFinalReceipt(s))) {
+        const reason=await this.documentBlock(r,d);
+        if(reason){await this.waitForAction(taskId,[reason]);return;}
+      }
       if(step.status==="failed"){
         if(failedBeforeCodexTurn(d.terminal?.receipt?.kind))return;
         const run=this.svc.state.runs.find(r=>r.id===d.runId);
@@ -1266,6 +1554,17 @@ export class TeamOrchestrator {
         await this.waitForAction(taskId,[step.automaticRecoveries>=1?"本棒自动恢复一次额度已用完，请核对原记录后重试当前棒":"原回合成果或停止回执待核对，不能安全重跑"]);return;
       }
       if(step.status==="cancelled")return;
+      if(s.roles.unattended&&step.purpose!=="final-delivery"){
+        const decision=r.events.findLast(e=>e.payload.dispatchId===d.dispatchId&&e.payload.reviewDecision);
+        if(!decision){
+          const prior=r.events.filter(e=>e.type==="REVIEW_REQUEUED"&&e.payload.authorizationId===s.activeAuthorizationId&&e.payload.targetId===step.targetId&&e.payload.versionId===s.versionId);
+          if(prior.length>=2){await this.waitForAction(taskId,["成员两次补做后仍未交回可核实的稿件或审核回执，已保留上次成果"]);return;}
+          const reset=this.events("REVIEW_REQUEUED",{dispatchId:d.dispatchId,versionId:s.versionId,targetId:step.targetId,authorizationId:s.activeAuthorizationId},"requeue:"+d.dispatchId);
+          const next=apply(s,{...reset,taskId});
+          const plan=await this.buildPlan(next,step.targetId,step.handoffIds,{purpose:"recover-review",previous:d.terminal.outputRef});
+          await this.commit(taskId,[reset,...plan.events],r.revision);this.svc.executor?.nudge();return;
+        }
+      }
       const missing=this.review.missingDecision(r,d);if(missing){await this.waitForAction(taskId,[missing]);return;}
       if(s.roles.kind==="ordered-chat"){
         const output=JSON.parse((await this.store.readBlob(d.terminal.outputRef)).toString());
@@ -1290,12 +1589,21 @@ export class TeamOrchestrator {
         }
       }
       if(completionReady(s)){
-        if(requestsFile(this.goalCache.get(s.taskId))&&!requiresFinalDelivery(s)){
+        if((s.roles.writerFinalReview||requestsFile(this.goalCache.get(s.taskId)))&&!requiresFinalDelivery(s)){
           await this.waitForAction(taskId,["约定的最终文件尚未登记到本轮签核版本"]);return;
         }
-        const receipt=requiresFinalDelivery(s)?await this.readFinalReceipt(s):null;
+        let receipt=requiresFinalDelivery(s)?await this.readFinalReceipt(s):null;
+        if(!receipt&&s.roles.unattended&&!s.roles.delivererId&&requiresFinalDelivery(s)){
+          const reviewer=s.roles.reviewer, signed=s.dispatches[s.confirmations[reviewer].dispatchId];
+          const files=await stageVersionFiles(this.store,s,join(this.store.root,"deliveries",digest(s.taskId)));
+          const id="run:"+signed.runId+":deliverable";
+          const prior=this.svc.ledger.listLedger(s.roomId,{force:true,limit:Number.MAX_SAFE_INTEGER}).find(row=>row.id===id);
+          if(!prior)this.svc.ledger.push({type:"deliverable",roomId:s.roomId,botId:reviewer,runId:signed.runId,files});
+          receipt=await this.readFinalReceipt(s);
+          if(!receipt){await this.waitForAction(taskId,["交付记录待核实，已保留签核终稿"]);return;}
+        }
         if(requiresFinalDelivery(s)&&!receipt){
-          const reviewer=s.roles.reviewer;
+          const reviewer=s.roles.delivererId??s.roles.reviewer;
           const payload=JSON.parse((await this.store.readBlob(d.payloadRef)).toString());
           if(!effectiveMembers(s).includes(reviewer)){
             await this.waitForAction(taskId,["等待终审成员交稿。请在原任务中点名授权终审成员"]);return;
@@ -1322,9 +1630,12 @@ export class TeamOrchestrator {
       }
       // A signature requests the other independent confirmation; ordinary turn end never does.
       if(s.versionId){
-        const target=(s.roles.confirmers??[]).find(id=>!signatureVerified(s,id)&&allowed.includes(id));
+        const signatureOrder=s.roles.writerFinalReview?[s.roles.reviewer,s.roles.first]:(s.roles.confirmers??[]);
+        const target=signatureOrder.find(id=>!signatureVerified(s,id)&&(s.roles.writerFinalReview||allowed.includes(id)));
+        if(target && !allowed.includes(target)){await this.waitForAction(taskId,["原单的"+(target===s.roles.reviewer?"复核人":"主笔")+"当前已失去群内资格，保留现有版本和签核。"]);return;}
         if(target){
-          const h={id:"review:"+s.versionId+":"+target,step:"joint-review",targetId:target,
+          const round=s.authSnapshots[s.activeAuthorizationId]?.jointReview?":"+s.activeAuthorizationId:"";
+          const h={id:"review:"+s.versionId+":"+target+round,step:"joint-review",targetId:target,
             textRef:await this.store.putBlob(["请复核并确认这一不可变成果版本；有修改请提交新版本。"]),evidenceRefs:s.artifactRefs[s.versionId]??[],
             contentHash:digest({versionId:s.versionId,target}),fromStepId:step.stepId,fromDispatchId:d.dispatchId,fromBotId:d.targetId,status:"pending"};
           // Created by the orchestrator, as a derived event carrying the settled source facts.
@@ -1510,6 +1821,30 @@ export class TeamOrchestrator {
       await report(detail);
     }
   }
+  async checkPendingDocumentStart(r) {
+    const s = r.state;
+    if (!(hasDocumentOrder(s)) || !s.roles.unattended || s.currentStepId ||
+        s.status !== "pending-review" || s.stop || !s.missing?.some(reason => reason.startsWith(preflightPrefix))) {
+      this.nextDocumentCheck.delete(r.taskId);
+      return false;
+    }
+    if (Date.now() < (this.nextDocumentCheck.get(r.taskId) ?? 0)) return true;
+    this.nextDocumentCheck.set(r.taskId, Date.now() + 60_000);
+    await this.serial(r.taskId, async () => {
+      const current = this.store.get(r.taskId)?.state;
+      if (!current || current.currentStepId || current.stop || current.status !== "pending-review" ||
+          this.svc.getRoom(current.roomId)?.paused || current.activeAuthorizationId !== s.activeAuthorizationId) return;
+      const reasons = await documentPreflight(this.svc, {...current,permissions:this.currentMembers(current.roomId)});
+      if (reasons.length) {
+        await this.waitForAction(r.taskId,reasons);
+        return;
+      }
+      await this.planStep(r.taskId,current.roles.first);
+      this.nextDocumentCheck.delete(r.taskId);
+      this.svc.executor?.nudge();
+    });
+    return true;
+  }
   async drain(){
     if(!this.opened||this.draining)return;this.assert();this.draining=true;
     try{
@@ -1539,6 +1874,9 @@ export class TeamOrchestrator {
           }
         }
         if(dispatch&&await this.reconcileRejectedStart(r,run))continue;
+        const legacyApprovalWait = !s.roles.writerFinalReview && hasDocumentOrder(s) && s.status==="pending-review" && dispatch?.status==="terminal" && s.missing.some(reason=>reason.startsWith("宿主审批阻塞（"));
+        if(!legacyApprovalWait&&s.roles.unattended&&live(s)&&!s.stop&&Date.now()-Date.parse(s.authSnapshots[s.activeAuthorizationId]?.at??r.events[0].at)>=maxDeliveryDurationMs){await this.stop(s.taskId,"达到四小时任务总时限，保留最近稿件和复核记录");continue;}
+        if(await this.checkPendingDocumentStart(r))continue;
         if(s.status==="stopping") {
           // The durable task decision can precede the executor's per-run intent during startup or shutdown.
           if(this.svc.stopRecoveryReady&&run&&(run.status==="queued"||(run.status==="running"&&!run.stop))){
@@ -1588,8 +1926,13 @@ export class TeamOrchestrator {
       if(route==="codex"){
         // The original App Server turn must be checked by ID; a native carrier ending is not its receipt.
         if(!d.turn?.threadId||!d.turn?.turnId)return;
-        await this.svc.executor?.inspectBeforeTimeout?.(run,{});const check=this.svc.state.runs.find(r=>r.id===run.id)?.upstreamVerification;
-        if(!["completed","failed","interrupted"].includes(check?.status))return;
+        await this.svc.executor?.inspectBeforeTimeout?.(run,{});
+        const current=this.svc.state.runs.find(r=>r.id===run.id);
+        if(current?.status!=="running" || current.controlRevision!==run.controlRevision ||
+           this.svc.executor?.active.has(run.id))return;
+        const result=recoveredCodexResult(current,d,found);
+        if (result) await this.svc.settleRun({id:run.id,expectedRevision:current.controlRevision,...result});
+        return;
       }else if(found.turn&&!d.turn)await this.runtimeStarted(run.id,found.turn);
       if(found.terminal){const status=found.terminal.status==="completed"?"completed":found.terminal.status==="aborted"?"cancelled":"failed";
         await this.svc.settleRun({id:run.id,expectedRevision:run.controlRevision,status,terminalReceipt:found.terminal,reply:{text:found.output}});}

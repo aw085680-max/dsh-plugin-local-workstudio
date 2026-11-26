@@ -1,3 +1,4 @@
+import {desktopDeliveryPath} from "./desktop-delivery-path.mjs";
 import {createHash, randomUUID} from "node:crypto";
 import {mkdir, readFile, readdir, realpath, rename, stat, unlink, writeFile} from "node:fs/promises";
 import {isAbsolute, join} from "node:path";
@@ -28,6 +29,7 @@ export class TaskReminders {
     this.bindingPath=join(this.root,"native-binding.json");
     this.bridge=new WindowsReminders(this.bindingPath);
     this.native=native??((op,args)=>this.bridge.call(op,args));
+    this.displayPaths=new Map();
     this.retry=new Set();
     this.tail=Promise.resolve(); this.projected=new Map(); this.closed=false; this.interactive=false;
   }
@@ -66,7 +68,19 @@ export class TaskReminders {
     }
   }
   async save(){this.dirty=true;await writeJson(this.path,this.data);this.dirty=false;}
-  forRoom(id){return Object.values(this.data?.events??{}).filter(e=>e.roomId===id&&e.kind!=="waiting").map(e=>this.publicEvent(e));}
+  forRoom(id) {
+    const events = Object.values(this.data?.events ?? {}).filter(e => e.roomId === id && e.kind !== "waiting");
+    const visible = events.sort((a,b)=>b.at.localeCompare(a.at)).map(e => this.publicEvent(e));
+    if (!visible.length) return visible;
+    const sources = new Map(this.svc.state.messages.filter(m => m.roomId === id && m.sender.kind === "user").map(m => [m.id,m]));
+    for (const event of visible) {
+      const m = sources.get(event.messageId);
+      if (event.kind !== "done" || !m) continue;
+      event.originEntry = {type:"user", id:m.id, messageId:m.id, roomId:id, text:m.text, at:m.createdAt, sequence:m.sequence,
+        senderName:m.sender.name, replyTo:m.replyTo, attachments:m.attachments};
+    }
+    return visible;
+  }
   async recordLoad(marker){await writeJson(join(this.root,"host-load.json"),{...marker,workspaceId:this.workspaceId,writer:this.team.store.lock.info(),nativeBindingActive:this.interactive,ready:true});}
   async observe(record,options){try{await this.project(record,options);}catch(error){this.retry.add(record.taskId);this.svc.ctx.logger?.warn?.("任务提醒待恢复："+error.message);}}
   stoppedLabel(s){return s?.status==="stopped"&&(s.roles.reviewProtocol===2||Object.values(s.authSnapshots??{}).some(a=>a.reviewOffer))?"本轮任务已停止。":"本轮任务已结束。";}
@@ -85,10 +99,10 @@ export class TaskReminders {
       const row=this.svc.ledger.listLedger(s.roomId,{force:true,limit:Number.MAX_SAFE_INTEGER})
         .find(r=>r.id===item.cardId&&r.type==="deliverable"&&r.runId===item.runId);
       const file=row?.files?.find(f=>f.name===item.name&&(!f.sha256||f.sha256===item.sha256));
-      if(!file||row.botId!==s.roles.reviewer)return null;
+      if(!file||row.botId!==(s.roles.delivererId??s.roles.reviewer))return null;
       const known=(s.artifactRefs?.[s.versionId]??[]).filter(f=>f.kind==="file"&&f.sha256===item.sha256);
       // Older declarations may only have the verified, versioned delivery path.
-      const path=file.deliveryOriginalPath??file.path;
+      const path=s.roles.unattended?file.path:file.deliveryOriginalPath??file.path;
       let bytes;
       try{bytes=await readFile(path);}catch{return null;}
       const sha=fileSha256(bytes);
@@ -121,7 +135,7 @@ export class TaskReminders {
     const goal=this.team.goalCache.get(s.taskId);
     const last=raw.at(-1);
     if(!last||s.history&&!raw.some(e=>!["HISTORY_IMPORTED","TASK_CREATED","PERMISSIONS_OBSERVED"].includes(e.type)))return null;
-    let taskId=s.taskId,roundId=origin,status=s.status, kind, files=[], text, at, eventPart;
+    let taskId=s.taskId,roundId=s.authSnapshots[origin]?.jointReview?origin:s.roles.unattended?(goal?.id??origin):origin,status=s.status, kind, files=[], text, at, eventPart;
     if(s.roles.assignment) {
       const a=s.roles.assignment;
       taskId=a.batchTaskId; roundId=a.sourceMessageId;
@@ -133,7 +147,7 @@ export class TaskReminders {
       const stopped=records.some(r=>r.state.stop);
       if(!records.every((r,i)=>closes[i]||r.state.status==="stopped"))return null;
       const recorded=await this.assignmentFiles(records);
-      if(!stopped&&(!recorded||requestsFile(message)&&!recorded.length)){kind="waiting";text="等待本轮最终交付文件。";}
+      if(!stopped&&(!recorded||(a.singleFile||requestsFile(message))&&!recorded.length)){kind="waiting";text="等待本轮最终交付文件。";}
       else {kind=stopped?"stopped":"done";files=recorded??[];}
       at=records.map(r=>r.events.at(-1)?.at??"").sort().at(-1);eventPart=kind;
     } else if(status==="stopped"&&s.stop){
@@ -155,8 +169,14 @@ export class TaskReminders {
       at=pending.at;kind="waiting";text=s.missing.join("、");eventPart=pending.id;
     } else return null;
     if(!at)return null;
+    if(s.roles.unattended&&kind==="done"){
+      const body=(await this.team.store.readBlob(s.manifests[s.versionId].bodyRef)).toString("utf8");
+      const reason=raw.findLast(e=>e.payload.targetId===s.roles.reviewer&&e.payload.reviewDecision?.action==="approve"&&e.payload.reviewDecision?.versionId===s.versionId)?.payload.reviewDecision.reason;
+      text=body.replace(/^#+\s*/gmu,"").trim().slice(0,240)+(reason?"\n复核结论："+reason:"");
+    }
     const key=digest([this.workspaceId,s.roomId,taskId,roundId,kind,eventPart]);
-    const messageId=kind==="waiting"?roundId:"close-"+digest([this.workspaceId,s.roomId,taskId,roundId]);
+    const onOrigin=kind==="waiting" || s.roles.unattended || (s.roles.assignment?.singleFile && kind==="done");
+    const messageId=onOrigin?roundId:"close-"+digest([this.workspaceId,s.roomId,taskId,roundId]);
     return {key,workspaceId:this.workspaceId,roomId:s.roomId,taskId,roundId,messageId,kind,at,versionId:s.versionId??null,
       roomName:this.svc.getRoom(s.roomId)?.name??"原群",title:(goal?.text??"群任务").slice(0,96),
       text:text??(kind==="stopped"?this.stoppedLabel(s)+"已按你的要求提前结束。":"本轮任务已结束。"),files:files??[]};
@@ -181,13 +201,20 @@ export class TaskReminders {
       if(event&&(event.at>=this.data.since||this.data.events[event.key])){
         const existing=this.data.events[event.key];
         if(!existing){
-          if(event.kind!=="waiting"){
+          await this.prepareDisplayPaths(event.files);
+          if(event.kind!=="waiting" && event.messageId!==event.roundId){
             const admin=(this.svc.getRoom(s.roomId)?.memberIds??[]).find(id=>this.team.threadCloser.isAdmin(id,s.roomId));
-            if(!admin)return;
-            await this.publish(event,admin);
+            if(!s.roles.unattended){if(!admin)return;await this.publish(event,admin);}
           }
           this.data.events[event.key]={...event,effective:true,desktop:"pending",handled:null};
           await writeJson(join(this.root,"tickets",event.key+".json"),{key:event.key,workspaceId:event.workspaceId});
+          changed=true;
+        } else if (s.roles.assignment?.singleFile && event.kind==="done" && existing.messageId!==event.messageId &&
+                   existing.taskId===event.taskId && existing.roundId===event.messageId &&
+                   existing.messageId==="close-"+digest([this.workspaceId,s.roomId,event.taskId,event.roundId]) &&
+                   existing.files.length===event.files.length && existing.files.every((f,i)=>f.id===event.files[i].id && f.sha256===event.files[i].sha256)) {
+          // Relink the existing verified receipt. Keep its stable key and notification state.
+          existing.messageId=event.messageId;
           changed=true;
         }
       }
@@ -204,7 +231,18 @@ export class TaskReminders {
       threadId:event.roundId,reminderKey:event.key,runtime:"task",presentation:"reply"};
     await this.team.persistMessage(message);
   }
+  async prepareDisplayPaths(files) {
+    for (const file of files) {
+      try {
+        const path = await desktopDeliveryPath(this.svc.home, file);
+        if (path !== file.path) this.displayPaths.set(file.id, path);
+      } catch (error) {
+        this.svc.ctx.logger?.warn?.("成品仍可从原消息预览，短路径准备失败：" + error.message);
+      }
+    }
+  }
   async recover(){
+    for (const event of Object.values(this.data?.events ?? {})) await this.prepareDisplayPaths(event.files ?? []);
     this.ledgerReady=true;
     for(const record of this.team.store.list())await this.observe(record);
     this.start();
@@ -269,7 +307,7 @@ export class TaskReminders {
     return {key:e.key,workspaceId:e.workspaceId,roomId:e.roomId,taskId:e.taskId,roundId:e.roundId,messageId:e.messageId,versionId:e.versionId,
       roomName:e.roomName,title:e.title,kind:e.kind,text:e.text,at:e.at,effective:e.effective,desktop:e.desktop,handled:e.handled,
       read:!!mark&&(mark.id===e.messageId||!!mark.at&&mark.at>=e.at),
-      files:e.files.map(({id,name,size,path})=>({id,name,size,path}))};
+      files:e.files.map(({id,name,size,path,runId})=>({id,name,size,runId,path:this.displayPaths?.get(id)??path}))};
   }
   async request(input){
     return this.serial(async()=>{
@@ -278,7 +316,7 @@ export class TaskReminders {
       if(op==="list")return {quiet:this.data.quiet,events:Object.values(this.data.events).sort((a,b)=>b.at.localeCompare(a.at)).map(e=>this.publicEvent(e))};
       if(op==="quiet"){if(typeof input.value!=="boolean")throw Error("勿扰设置无效");this.data.quiet=input.value;await this.save();return {quiet:this.data.quiet};}
       if(op==="client-ready"){
-        if(input.build!=="local-workstudio-v1.0.0-r20")throw Error("界面构建版本不符");
+        if(!["local-workstudio-v1.0.0-r20","local-workstudio-v1.1.0"].includes(input.build))throw Error("界面构建版本不符");
         await writeJson(join(this.root,"client-load.json"),{build:input.build,at:this.clock(),hostPid:process.pid,desktop:input.desktop===true,workspaceId:this.workspaceId});return {ready:true};
       }
       if(op==="forget-route"){this.data.routes=this.data.routes.filter(r=>r.id!==input.routeId||r.key!==input.key);await this.save();return {ok:true};}

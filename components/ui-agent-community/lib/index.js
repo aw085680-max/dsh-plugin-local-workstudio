@@ -2,7 +2,7 @@ import {createHash} from "node:crypto";
 import {readFileSync} from "node:fs";
 import {writeFile} from "node:fs/promises";
 const UI_LOAD_MARKER=Object.freeze({
- build:"local-workstudio-v1.0.0-r20",pid:process.pid,module:import.meta.url,loadedAt:new Date().toISOString(),
+ build:"local-workstudio-v1.1.0",pid:process.pid,module:import.meta.url,loadedAt:new Date().toISOString(),
  hostSha256:createHash("sha256").update(readFileSync(new URL(import.meta.url))).digest("hex").toUpperCase(),
  clientModule:new URL("./client.js",import.meta.url).href,
  clientSha256:createHash("sha256").update(readFileSync(new URL("./client.js",import.meta.url))).digest("hex").toUpperCase()

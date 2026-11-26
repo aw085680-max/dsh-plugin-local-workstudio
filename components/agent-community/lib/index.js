@@ -1,3 +1,5 @@
+import {roomSettingsRevision} from "./room-settings.mjs";
+import {desktopDeliveryPath} from "./desktop-delivery-path.mjs";
 import { TeamOrchestrator } from "./team-orchestrator.mjs";
 import { setSandboxMode } from "@deepseek-ai/dsh-sandbox-policy";
 import {CHAT_TURN_LIMIT_MS, displayReply, isChatRun} from "./team-chat-routing.mjs";
@@ -12,9 +14,9 @@ import z from "@deepseek-ai/schemastery";
 import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 const TEAM_LOAD_MARKER = Object.freeze({
-  build:"local-workstudio-v1.0.0-r20",pid:process.pid,module:import.meta.url,loadedAt:new Date().toISOString(),
+  build:"local-workstudio-v1.1.0",pid:process.pid,module:import.meta.url,loadedAt:new Date().toISOString(),
   sha256:createHash("sha256").update(readFileSync(new URL(import.meta.url))).digest("hex").toUpperCase(),
-  modules:Object.freeze(Object.fromEntries(["team-machine.mjs","team-store.mjs","team-orchestrator.mjs","team-session-bridge.mjs","team-chat-routing.mjs","team-chat.mjs","team-thread-close.mjs","team-followup.mjs","handoff-speech.mjs","team-review.mjs","team-member-assignments.mjs","task-reminders.mjs","windows-reminders.mjs","team-delivery.mjs"].map(name=>[name,{
+  modules:Object.freeze(Object.fromEntries(["team-machine.mjs","team-store.mjs","team-orchestrator.mjs","team-session-bridge.mjs","team-session-recovery.mjs","team-chat-routing.mjs","group-routing.mjs","single-file.mjs","desktop-delivery-path.mjs","room-settings.mjs","document-work-order.mjs","document-preflight.mjs","team-chat.mjs","team-thread-close.mjs","team-followup.mjs","handoff-speech.mjs","sequential-handoff.mjs","team-review.mjs","team-member-assignments.mjs","task-reminders.mjs","windows-reminders.mjs","team-delivery.mjs"].map(name=>[name,{
     path:new URL(name,import.meta.url).href,sha256:createHash("sha256").update(readFileSync(new URL(name,import.meta.url))).digest("hex").toUpperCase()
   }])))
 });
@@ -2276,6 +2278,12 @@ const SHADOWED_SECTIONS = [
 */
 function botPromptSections(identity) {
 	const description = identity.botDescription.trim();
+	if (identity.hostScheduled) return [{
+		name: "bots:identity", order: BASE, text: "你是「" + identity.botName + "」。" + description
+	}, {
+		name: "bots:room", order: 2,
+		text: "本回合是工作室已排好顺序的一棒。请核查自己的分工，只回复实际结果及依据。群里发表这条正文就是完成本棒，系统会将原文送到下一位。派单进度由工作室显示。需要调查时可使用已有资料和工具。"
+	}];
 	if (identity.chatOnly) return [{
 		name:"bots:identity", order:BASE, text:"你是「"+identity.botName+"」。"+description
 	},{
@@ -3216,7 +3224,7 @@ var SessionRunner = class SessionRunner {
 				if (SessionRunner.aborted(signal)) return this.abortedOutcome();
 				if (onProgress !== void 0) this.progressHandlers.set(key, onProgress);
 				if (!await this.ensureSlot(signal, priority)) return this.abortedOutcome();
-				const agent = await this.ensureAgent(roomId, botId, this.opts.sessionForRun?.(runId));
+				const agent = await this.ensureAgent(roomId, botId, this.opts.sessionForRun?.(runId), runId);
 				await this.opts.beforeTurn?.(roomId,botId,agent,signal,onProgress);
 				this.touch(key);
 				this.running.add(key);
@@ -3438,6 +3446,7 @@ var SessionRunner = class SessionRunner {
 			if (reason?.kind !== "error") return void 0;
 			const message = reason.error?.message ?? "";
 			const code = reason.error?.code;
+			if (code === "MISSING_CREDENTIAL") return "当前宿主缺少该提供方的模型凭据（MISSING_CREDENTIAL）";
 			return typeof code === "string" && (code.startsWith("LOCAL_AGENT_") || code === "NO_ADAPTER" || code === "INVALID_REQUEST") || looksLikeProviderRejection(message) ? message !== "" ? message : `provider failed (${String(code)})` : void 0;
 		}
 	}
@@ -3479,7 +3488,7 @@ var SessionRunner = class SessionRunner {
 	* create, which is why host memory did not survive a restart. The correct field is
 	* used here.
 	*/
-	async ensureAgent(roomId, botId, requestedSessionId) {
+	async ensureAgent(roomId, botId, requestedSessionId, runId) {
 		const key = SessionRunner.key(roomId, botId);
 		const sessionId = requestedSessionId ?? this.accessor.sessionIdFor(roomId, botId);
 		const live = this.agents.get(key);
@@ -3524,11 +3533,12 @@ var SessionRunner = class SessionRunner {
 				this.ctx.logger?.info?.(`agent-community: bot tool mask room=${roomId} bot=${botId} applied=[${mask.applied.join(",")}] skipped=[${mask.skipped.join(",")}]`);
 				this.noteToolMask(`initial room=${roomId} bot=${botId} applied=[${mask.applied.join(",")}] skipped=[${mask.skipped.join(",")}]`);
 			}
-			this.opts.setupAgent?.(agentCtx, roomId, botId);
+			const hostScheduled = this.opts.hostScheduled?.(roomId, botId, sessionId, runId) === true;
+			this.opts.setupAgent?.(agentCtx, roomId, botId, hostScheduled, sessionId);
 			const bot = this.accessor.botById(botId);
 			const leaderId = this.accessor.leaderOf(roomId);
 			const prompt = installBotPrompt(agentCtx, {
-				chatOnly: this.opts.chatOnly,
+				chatOnly: this.opts.chatOnly, hostScheduled,
 				botName: bot?.name ?? "Bot",
 				botDescription: bot?.description ?? "",
 				isLeader: leaderId !== void 0 && leaderId === botId,
@@ -9763,6 +9773,7 @@ var RunExecutor = class {
 			if (known?.turnId===payload.turnId || (known && !known.terminal) || this.pendingStops.get(runId)?.request.turnId) return;
 			const bound={threadId:payload.threadId,turnId:payload.turnId,at:new Date(Math.min(payload.at ?? Date.now(),Date.now())).toISOString()};
 			this.upstreamByRun.set(runId,bound);
+			if(payload.turnModel)this.svc.updateRunBudget(runId,{turnModel:payload.turnModel,turnEffort:payload.turnEffort});
 			const liveBudget=this.runBudgets.get(runId);
 			if (liveBudget) { liveBudget.itemStates=new Map(); liveBudget.activeTools=0; liveBudget.activeCompactions=0; liveBudget.compactionStartedAtMs=void 0; }
 			this.svc.recordRunUpstream?.(runId,bound);
@@ -10851,7 +10862,7 @@ var LedgerProjector = class LedgerProjector {
 		const full = {
 			...entry,
 			at: entry.at ?? (/* @__PURE__ */ new Date()).toISOString(),
-			id: rowRunId !== void 0 && rowType !== void 0 ? `run:${rowRunId}:${rowType}${rowCallId !== void 0 ? `:${rowCallId}` : ""}` : randomUUID(),
+			id: rowType==="user"&&entry.messageId?entry.messageId:rowRunId !== void 0 && rowType !== void 0 ? `run:${rowRunId}:${rowType}${rowCallId !== void 0 ? `:${rowCallId}` : ""}` : randomUUID(),
 			sequence: ++this.seq,
 			rev: 1,
 			changeSeq: ++this.change
@@ -10919,9 +10930,10 @@ var LedgerProjector = class LedgerProjector {
 	hydrate(roomId, rows) {
 		const list = this.byRoom.get(roomId) ?? [];
 		const indices = new Map(list.map((entry, index) => [entry.id, index]));
+		const userIndices=new Map(list.flatMap((e,i)=>e.type==="user"&&e.messageId?[[e.messageId,i]]:[]));
 		let added = 0, reordered = false;
 		for (const row of rows) {
-			const index = indices.get(row.id);
+			const index = indices.get(row.id) ?? (row.type==="user"&&row.messageId?userIndices.get(row.messageId):undefined);
 			if (index !== void 0) {
 				const current = list[index];
 				// The message rebuild assigns temporary positions. Use the published file's
@@ -10936,6 +10948,7 @@ var LedgerProjector = class LedgerProjector {
 				continue;
 			}
 			indices.set(row.id, list.length);
+			if(row.type==="user"&&row.messageId)userIndices.set(row.messageId,list.length);
 			list.push(row);
 			this.seq = Math.max(this.seq, row.sequence);
 			this.change = Math.max(this.change, row.changeSeq ?? 0);
@@ -16879,6 +16892,8 @@ function registerCollaborationTools(agentCtx, deps) {
 	*/
 	const failedTools = [];
 	const add = (spec) => {
+		if (deps.singleFile && spec.name!=="agent_community_deliver" && !spec.name.startsWith("agent_community_read_")) return;
+		if (deps.hostScheduled && !spec.name.startsWith("agent_community_read_") && spec.name !== "agent_community_progress") return;
 		try {
 			registerOne(spec);
 		} catch (error) {
@@ -23886,9 +23901,15 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 					this.executor?.onTurnStarted(runId);
 				},
 				beforeTurn: (_roomId,_botId,agent) => this.installRoomCompressionHooks(agent.ctx),
-				setupAgent: (agentCtx, roomId, botId) => {
+				hostScheduled: (roomId, botId, sessionId, runId) => {
+					const run = this.state.runs.find(row => row.id === runId);
+					if (!run?.teamTaskId || run.roomId !== roomId || run.botId !== botId || run.sessionId !== sessionId || run.status !== "running") return false;
+					const assignment = this.teamOrchestrator.recordForRun(run)?.state.roles.assignment;
+					return !!assignment && this.state.messages.some(message => message.roomId === roomId && message.id === assignment.sourceMessageId && message.routeDecision?.sequentialMembers);
+				},
+				setupAgent: (agentCtx, roomId, botId, hostScheduled, sessionId) => {
                     this.installRoomCompressionHooks(agentCtx);
-					const failedTools = this.installCollaborationTools(agentCtx, roomId, botId);
+					const failedTools = this.installCollaborationTools(agentCtx, roomId, botId, hostScheduled, sessionId);
 					if (failedTools.length > 0) this.ctx.logger?.warn?.(`agent-community: ${failedTools.length} collaboration tool(s) could not register for room=${roomId} bot=${botId}: ${failedTools.map((f) => `${f.name} (${f.reason})`).join("; ")}`);
 				},
 				idleLimit: config.idleLimit ?? 12,
@@ -24945,7 +24966,12 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 		const supervisorId = input.supervisorId === void 0 ? this.leaderOfRoom(room.id) : input.supervisorId;
 		if (!firstBotId || !reviewerId || firstBotId === reviewerId || ![firstBotId, reviewerId].every((id) => members.includes(id) && this.getBot(id))) throw new Error("首做与复核必须是本群两位不同成员。");
 		if (supervisorId && !members.includes(supervisorId)) throw new Error("队长不在本群。");
+		const previousDeliverer = room.teamWorkflow?.delivererId;
+		const delivererId = input.delivererId === undefined && [firstBotId, reviewerId].includes(previousDeliverer)
+			? previousDeliverer : input.delivererId;
+		if (delivererId && ![firstBotId, reviewerId].includes(delivererId)) throw new Error("最终交付人须是本次首做或复核成员。");
 		return { mode: "until-final-review", firstBotId, reviewerId, memberIds: [firstBotId, reviewerId],
+			...(delivererId ? {delivererId} : {}),
 			...supervisorId && ![firstBotId, reviewerId].includes(supervisorId) ? { supervisorId } : {} };
 	}
 	authorizationForRun(run) {
@@ -25919,8 +25945,10 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 		};
 		this.enqueueWrite();
 	}
-	installCollaborationTools(agentCtx, roomId, botId) {
+	installCollaborationTools(agentCtx, roomId, botId, hostScheduled = false, sessionId) {
 		return registerCollaborationTools(agentCtx, {
+			hostScheduled,
+            singleFile:this.teamOrchestrator.documentAccess(sessionId)?.singleFile,
 			ownerOf: (exec) => {
 				const viaExec = exec?.agent?.session?.id;
 				if(typeof viaExec==="string"){
@@ -26017,7 +26045,7 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 					ok: false,
 					error: "预演不能声明交付文件；只产出草稿。"
 				});
-				return this.deliverBotFiles(input);
+				return this.deliverBotFiles({...input,sessionId});
 			},
 			recallEnabled: this.cfg.recallEnabled === true,
 			readHistory: (input) => this.readHistoryForBot(input),
@@ -26936,7 +26964,7 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 			const tokenThreshold=custom?setting.tokenThreshold??(modelWindow?Math.floor(modelWindow*(setting.thresholdRatio??0.8)):null):null;
 			const revision=createHash("sha256").update(JSON.stringify({setting,provider:bot.provider,model:bot.model})).digest("hex");
 			const keepLast=setting.keepLast??4,recentMessages=this.state.messages.filter(m=>m.roomId===room.id).slice(keepLast>0?-keepLast:Infinity).map(m=>({id:m.id,sender:m.sender,text:m.modelText??m.text,attachments:m.attachments??[],deliverables:m.deliverables??[]}));
-			return {roomId:room.id,botId,sessionId,revision,inherit:!custom,tokenThreshold,thresholdRatio:setting.thresholdRatio??0.8,keepLast,modelWindow,recentMessages};
+			return {roomId:room.id,botId,sessionId,revision,model:bot.model,effort:bot.reasoningEffort,inherit:!custom,tokenThreshold,thresholdRatio:setting.thresholdRatio??0.8,keepLast,modelWindow,recentMessages};
 		}
 	}
 	recordCompressionReceipt(input) {
@@ -27025,15 +27053,19 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 		const idx = this.state.rooms.findIndex((r) => r.id === input.id);
 		if (idx < 0) throw new Error(`Room "${input.id}" not found`);
 		const prev = this.state.rooms[idx];
+		if (input.expectedSettings !== undefined && (this.writesBlocked || input.expectedSettings !== roomSettingsRevision(prev))) {
+			throw Error(this.writesBlocked ? "群设置当前无法写入，请检查测试宿主" : "群设置已在别处修改，请重读后重试");
+		}
 		const nextMembers = input.memberIds !== void 0 ? input.memberIds.map((id) => brandId(id)) : prev.memberIds;
-        const revoked=input.revokedMemberIds===undefined?prev.revokedMemberIds??[]:[...new Set(input.revokedMemberIds)];
+        const revoked=input.revokedMemberIds===undefined?(prev.revokedMemberIds??[]).filter(id=>nextMembers.includes(id)):[...new Set(input.revokedMemberIds)];
+        if(input.expectedSettings!==undefined && (!String(input.name??prev.name).trim() || nextMembers.length<1 || new Set(nextMembers).size!==nextMembers.length || nextMembers.some(id=>!this.getBot(id)))) throw Error("请填写群名并选择至少一名有效成员。");
         if(revoked.some(id=>!nextMembers.includes(id)))throw Error("撤权对象必须是当前群成员");
 		// [D-4 2026-11-16] 队长与压缩设置都在这里校验并落盘：面板只提交，判定在服务端。
 		const nextTeam = this.teamAfterLeaderChange(prev, input, nextMembers);
 		const nextCompression = input.compression === void 0 ? prev.compression : normalizeRoomCompression(input.compression);
 
 		const workflowInput=input.teamWorkflow===void 0?prev.teamWorkflow:input.teamWorkflow;
-		const workflowLeader=input.leaderBotId===void 0?this.leaderOfRoom(prev.id):input.leaderBotId;
+		const workflowLeader=input.leaderBotId===void 0?nextTeam?.leader?.botId??nextMembers[0]:input.leaderBotId;
 		const nextWorkflow=workflowInput?this.normalizeTeamWorkflow(prev,{...workflowInput,supervisorId:workflowLeader??null},nextMembers):void 0;
 		const admission = input.admission === void 0 ? prev.admission : normalizeAdmission(input.admission);
 		const speculation = input.speculation === void 0 ? prev.speculation : normalizeSpeculation(input.speculation);
@@ -27081,6 +27113,7 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 			if (await this.groupFlow.dissolveIfEmpty(prev.id)) return updated;
 		}
 		// [D-4] 面板保存后要立刻回读：返回值带上派生的队长与压缩实际生效值（与快照同形）。
+		if (input.expectedSettings !== undefined) await this.flushNow();
 		const persisted = this.getRoom(input.id) ?? updated;
 		return {
 			...persisted,
@@ -28586,6 +28619,7 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 			...patch.lastProgressAt !== void 0 ? { lastProgressAt: patch.lastProgressAt } : {},
 			...patch.extensions !== void 0 ? { extensions: patch.extensions } : {},
 			...patch.progressEvents !== void 0 ? { progressEvents: patch.progressEvents } : {},
+			...patch.turnModel ? {turnModel:patch.turnModel,turnEffort:patch.turnEffort}: {},
 			...patch.lastToolProgress !== void 0 ? {lastToolProgress:patch.lastToolProgress} : {},
 			updatedAt: nowIso()
 		};
@@ -29153,7 +29187,12 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 	* path the host would later refuse to open.
 	*/
 	async deliverBotFiles(input) {
-		const runId = this.currentRunIdFor(input.roomId, input.botId);
+        const candidate=this.activeHandoffRun(input.roomId,input.botId);
+        const runId=input.sessionId ? (candidate?.sessionId===input.sessionId?candidate.id:undefined) : this.currentRunIdFor(input.roomId,input.botId);
+        const run=this.state.runs.find(row=>row.id===runId);
+        const single=!!run?.teamTaskId&&this.teamOrchestrator.recordForRun(run)?.state.roles.assignment?.singleFile;
+        if(single && (!input.sessionId || !this.teamOrchestrator.documentAccess(input.sessionId)?.operations.includes("deliver")))
+          return {ok:false,error:"当前会话没有本单文件交付权限"};
 		if (runId === void 0) return {
 			ok: false,
 			error: "现在没有正在进行的回合：交付只能在本回合内声明。"
@@ -29166,7 +29205,8 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 			ok: false,
 			error: `一次最多交付 ${this.cfg.deliverMaxFiles} 个文件。`
 		};
-		const workspace = this.runWorkspaceDir(input.botId);
+		const workspace = single ? await this.teamOrchestrator.documentDraftWorkspace(input.sessionId) : this.runWorkspaceDir(input.botId);
+        if(!workspace)return {ok:false,error:"本单工作目录不可用"};
 		const out = [];
 		const seen = /* @__PURE__ */ new Set();
 		for (const file of input.files) {
@@ -29225,6 +29265,12 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 		if(!this.teamOrchestrator.reminders.data)throw Error("任务提醒尚未就绪");
 		return this.teamOrchestrator.reminders.request(input);
 	}
+    async verifiedPreviewFile(input) {
+        const file=this.declaredFileForAction(input);
+        if(file?.sha256 && createHash("sha256").update(await readFile(file.path)).digest("hex")!==file.sha256)
+          throw Error("文件内容与交付回执不同，请核对原单的成品位置");
+        return file;
+    }
 	declaredFileForAction(input) {
 		if(input.reminderKey)return this.teamOrchestrator.reminders.file(input);
 		// Initialize a new or forked room before addressing its full, room-scoped ledger.
@@ -29253,7 +29299,16 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 	* from the browser — it does not depend on the client Remote surface.
 	*/
 	async deliverableFileAction(input) {
-		const file = this.declaredFileForAction(input);
+		let file = this.declaredFileForAction(input);
+    if(file&&input.reminderKey&&file.sha256){
+      let hash;try{hash=createHash("sha256").update(await readFile(file.path)).digest("hex");}catch{}
+      if(hash!==file.sha256){
+        const event=this.teamOrchestrator.reminders.data?.events?.[input.reminderKey];
+        const state=event&&this.teamOrchestrator.store.get(event.taskId)?.state;
+        if(!state?.roles.unattended||event.versionId!==state.versionId)return {ok:false,error:"交付文件已变动，需要重新核实"};
+        await this.teamOrchestrator.restoreDeliveredFile(state,file);
+      }
+    }
 		if (file === void 0) return {
 			ok: false,
 			error: "这个文件已不在交付记录里。"
@@ -29266,6 +29321,7 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 		const abort = new AbortController();
 		const timer = setTimeout(() => abort.abort(), 2e4);
 		try {
+			if (input.reminderKey) file = {...file, path:await desktopDeliveryPath(this.home,file)};
 			if (input.action === "applications") return {
 				ok: true,
 				applications: await controller.workspacePathApplications({ path: file.path }, abort.signal)
@@ -29314,7 +29370,7 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 	* engine DSH's document preview uses — addressed through the delivery record.
 	*/
 	async renderDeliverableDocument(input) {
-		const file = this.declaredFileForAction(input);
+		const file = await this.verifiedPreviewFile(input);
 		if (file === void 0) return {
 			ok: false,
 			error: "这个文件已不在交付记录里。"
@@ -29381,7 +29437,7 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 	* (the ledger's red line).
 	*/
 	async readDeliverablePreview(input) {
-		const file = this.declaredFileForAction(input);
+		const file = await this.verifiedPreviewFile(input);
 		if (file === void 0) return {
 			kind: "missing",
 			name: ""
@@ -31806,6 +31862,7 @@ var AgentCommunityService = class AgentCommunityService extends TypertRemoteServ
 			}
 		}
 		const rows = this.ledger.listLedger(roomId, opts ?? {}).map(row=>{
+      if(row.replyTo){const source=this.state.messages.find(m=>m.roomId===roomId&&m.id===row.replyTo);if(source)row={...row,replyPreview:source.text?.slice(0,100)};}
       if(row.type!=="deliverable"||!row.runId)return row;
       const run=this.state.runs.find(r=>r.roomId===roomId&&r.id===row.runId);
       const msg=this.state.messages.find(m=>m.roomId===roomId&&m.runId===row.runId&&m.sender.kind==="bot"&&m.sender.botId===row.botId);

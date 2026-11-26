@@ -1,5 +1,9 @@
+import {handoffScope,sequentialHandoff} from "./sequential-handoff.mjs";
+import {documentReview,jointReviewPair} from "./joint-review.mjs";
+import {requestsSingleFile} from "./single-file.mjs";
+import {collaborationPlan,managedGroup} from "./group-routing.mjs";
 import {effectiveMembers} from "./team-machine.mjs";
-import {classifyUserRequest,maskGroupLinks} from "./team-chat-routing.mjs";
+import {classifyUserRequest,maskGroupLinks,requestsAttachedDocument} from "./team-chat-routing.mjs";
 const finished=s=>["completed","stopped","stopping"].includes(s.status);
 const settled=d=>d?.terminal?.status==="succeeded"&&d.receipt&&d.turn;
 export function lastAuthorTurn(r,author,until){
@@ -21,18 +25,51 @@ export class TeamFollowup {
     return {taskId:r.taskId,status:s.status,author,sourceRunId:source?.runId??null,versionId:s.versionId,
       hasReviewWork:s.roles.confirmers?.length===2&&!!(source||s.versionId||pending.length),pendingIds:pending.map(h=>h.id),nextIds,members};
   }
-  classify(room,input,original){
+  classify(room,input,original,live=false){
     const roster=this.svc.state.bots.filter(b=>room.memberIds.includes(b.id));
     const authored=this.team.helpers.parseMentions(maskGroupLinks(input.text),roster);
     const members=this.team.currentMembers(room.id),selected=new Set(input.mentions??[]);
     const ids=authored.ids.filter(id=>selected.has(id)&&members.includes(id));
-    const mentioned=authored.who==="everyone"?[...new Set([...ids,...members])]:ids;
-    const unknown=/(?:^|[\s，、。])@[^@\s]/u.test(authored.remainder??"")||!authored.who&&authored.ids.length!==ids.length;
+    const mentioned=authored.who==="everyone"?[...new Set([...ids,...members])]:[...ids];
+    const unknown=/(?:^|[\s，、。])@[^@\s]/u.test(authored.remainder??"")||authored.ids.length!==ids.length;
     const refId=input.replyTo??input.threadId,reference=refId?this.svc.state.messages.find(m=>m.roomId===room.id&&m.id===refId):null;
     const invalid=!!refId&&!reference||!!input.threadId&&!this.svc.state.messages.some(m=>m.roomId===room.id&&m.id===input.threadId);
+    const inferred=reference?.sender?.kind==="bot"?reference.sender.botId:reference?.mentions?.length===1?reference.mentions[0]:undefined;
+    if (!mentioned.length&&!unknown&&!invalid&&members.includes(inferred)) mentioned.push(inferred);
     const context=this.speechContext(room,input,reference,original,roster);
-    const body=authored.remainder??input.text,decision=classifyUserRequest(body,{...input,handoffContext:context,hasExplicitOrder:(authored.sequence?.length??0)>1,hasReference:!!reference||!!input.attachments?.length});
-    return {roster,authored,ids,mentioned,unknown,reference,invalid,body,decision};
+    const body=authored.remainder??input.text,decision=classifyUserRequest(body,{...input,handoffContext:context,roomId:room.id,managedGroup:managedGroup(room),hasExplicitOrder:(authored.sequence?.length??0)>1,hasReference:!!reference||!!input.attachments?.length});
+    if (live) {
+      const chat = {intent:"chat",basis:body};
+      let route = chat;
+      if (!unknown && !invalid) {
+        const action=input.submissionAction ?? "chat";
+        const linked=reference?.taskRef && this.team.store.get(reference.taskRef)?.state.roomId===room.id;
+        if (["append-document","review-document"].includes(action)) route=decision;
+        else if (linked && ["append","resume","stop","close-thread","review","return-review"].includes(decision.intent)) route=decision;
+        else if (decision.intent==="ordered-chat" && (authored.who==="everyone" || ids.length>1)) route=decision;
+        else {
+          const plan=collaborationPlan({authored,body,roster,eligible:members,leader:room.team?.leader?.botId,
+            saved:this.svc.teamWorkflowFor(room),referenced:inferred,button:action==="delegate-document",
+            delegatedToGroup:authored.who==="everyone" && (decision.intent==="create" ||
+              requestsAttachedDocument(body,{...input,roomId:room.id,groupDelegation:true}))});
+          if (plan?.clarification) route={...chat,clarification:plan.clarification};
+          else if (plan) route={intent:"create",delivery:true,explicitWorkOrder:true,documentPlan:plan,basis:body};
+          else if (ids.length===1 && authored.who!=="everyone" && requestsSingleFile(body)) route={intent:"single-file",recipientId:ids[0],basis:body};
+          else if (decision.intent==="progress") route=decision;
+        }
+      }
+      return {roster,authored,ids,mentioned,unknown,reference,invalid,body,decision:route};
+    }
+    if (!unknown && !invalid && requestsAttachedDocument(body,{...input,roomId:room.id,managedGroup:managedGroup(room)}))
+      return {roster,authored,ids,mentioned,unknown,reference,invalid,body,decision:{intent:"create",delivery:true,attachedDocument:true,basis:body}};
+    const relay=!unknown&&!invalid&&authored.who!=="everyone"&&sequentialHandoff(room,body,roster,members,ids,reference);
+    const artifact=!unknown&&!invalid&&documentReview(body);
+    if(relay&&!artifact&&!decision.delivery)return {roster,authored,ids,mentioned:relay.sequentialMembers,unknown,reference,invalid,body,decision:relay};
+    const pair=!unknown&&!invalid&&(jointReviewPair(room,body,roster,members,ids,reference) || ((artifact || decision.delivery) && relay?.sequentialMembers));
+    const scope=!pair&&!unknown&&!invalid&&!decision.delivery&&!decision.roleStatement&&!decision.reviewQuery&&
+      ["chat","create"].includes(decision.intent)&&authored.who!=="everyone"&&handoffScope(room,input.text,roster,members,ids,reference);
+    const resolved=pair?{intent:"create",delivery:true,jointMembers:pair,...(artifact?{documentReview:artifact}:{}),basis:body}:scope?{intent:"chat",basis:body,semanticScope:scope}:decision;
+    return {roster,authored,ids,mentioned,unknown,reference,invalid,body,decision:resolved};
   }
   historicalAnchor(room,message){
     const previous=this.svc.state.messages.filter(m=>m.roomId===room.id&&m.sender.kind==="user"&&m.id!==message.id&&
@@ -139,6 +176,7 @@ export class TeamFollowup {
     }
   }
   async retry(room,message,run){
+    if(message.routingVersion===3)return null;
     const team=this.team;
     if(message.followupRetry?.runId===run.id){
       if(message.reviewReturn&&!message.requestError&&!message.reviewAlias)await team.review.process(message);

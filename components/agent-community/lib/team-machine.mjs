@@ -91,6 +91,45 @@ export function apply(input, event) {
     return restored;
   }
   need(s.status!=="uninitialized","NOT_CREATED","任务尚未创建");
+  if(event.type==="FINAL_DELIVERER_SELECTED") {
+    need(!closed(s)&&!s.stop&&s.recoveredReview&&s.roles.confirmers.includes(p.delivererId)&&effectiveMembers(s).includes(p.delivererId)&&p.source==="group-workflow","DELIVERY_SCOPE","交付人不在原单的授权成员内");
+    need(terminal(s.steps[s.currentStepId]?.status)&&!s.order.some(id=>s.steps[id]?.purpose==="final-delivery"),"DELIVERY_STARTED","当前回合尚未结算或已进入交稿");
+    s.roles.delivererId=p.delivererId;return s;
+  }
+  if(event.type==="USER_DRAFT_SUBMITTED") {
+    const a=p.authorization,m=p.manifest,g=a?.documentWorkOrder;
+    need(s.status==="pending-review"&&!s.stop&&!s.versionId&&Object.values(s.dispatches).every(d=>["terminal","revoked"].includes(d.status)),
+      "RECOVERY_STATE","只允许为已停在送审前的原单登记用户稿");
+    need(g?.taskId===s.taskId&&g.roomId===s.roomId&&g.origin===a.messageId&&!s.authSnapshots[a.messageId]&&
+      s.authSnapshots[a.originalMessageId]&&g.writer===s.roles.first&&g.reviewer===s.roles.reviewer&&g.deliverer===(s.roles.delivererId??s.roles.reviewer)&&
+      canonical(a.members)===canonical(s.roles.confirmers)&&a.members.every(id=>effectiveMembers(s).includes(id))&&p.messageRef?.sha256,
+      "RECOVERY_SCOPE","待审稿与本单用户授权不符");
+    need(m?.bodyRef?.sha256===m.bodyHash&&m.versionId===digest({bodyHash:m.bodyHash,evidence:m.evidence})&&
+      /^[a-f0-9]{64}$/.test(p.sourceHash)&&p.refs?.length===1&&p.refs[0].sha256===m.bodyHash&&
+      canonical(a.reviewOffer?.manifest)===canonical(m)&&a.reviewOffer.targetId===g.reviewer,"MANIFEST_MISMATCH","重建稿清单与正文不符");
+    s.authSnapshots[a.messageId]=copy(a);s.activeAuthorizationId=a.messageId;s.messages.push(copy(p.messageRef));
+    s.versionId=m.versionId;s.manifests[m.versionId]=copy(m);s.artifactRefs[m.versionId]=copy(p.refs);s.confirmations={};
+    s.recoveredReview={versionId:m.versionId,sourceHash:p.sourceHash,sourceName:p.sourceName,origin:a.originalMessageId};
+    s.missing=[];s.status="pending";return s;
+  }
+  if(event.type==="REVIEW_HANDOFF_RECOVERED") {
+    const h=s.handoffs[p.handoffId], source=h&&s.dispatches[h.fromDispatchId], m=p.manifest, a=p.authorization;
+    need(s.status==="pending-review" && !s.stop && !s.versionId && !s.roles.reviewer && h?.status==="pending" &&
+      h.fromBotId===s.roles.first && source?.terminal?.status==="succeeded" && source.targetId===h.fromBotId &&
+      source.stepId===s.currentStepId && h.targetId!==h.fromBotId, "RECOVERY_STATE","交接已变化，不能按待接稿恢复");
+    need(h.textRef.sha256===p.sourceHash && p.workOrderRef?.sha256 && a?.originalMessageId===s.activeAuthorizationId &&
+      a.members.length===2 && a.members[0]===h.fromBotId && a.members[1]===h.targetId &&
+      a.members.every(id=>s.permissions.includes(id)), "RECOVERY_SCOPE","恢复授权与原交接不匹配");
+    need(m?.bodyRef?.sha256===m.bodyHash && m.versionId===digest({bodyHash:m.bodyHash,evidence:m.evidence}) &&
+      p.refs?.length===1 && m.evidence.length===1 && m.evidence[0].sha256===p.refs[0].sha256 &&
+      p.refs[0].sha256===m.bodyHash,"MANIFEST_MISMATCH","待审版本不符合原稿登记");
+    s.authSnapshots[a.messageId]=copy(a);s.activeAuthorizationId=a.messageId;
+    s.roles={...s.roles,unattended:true,reviewProtocol:2,reviewFirstResult:true,order:[...a.members],confirmers:[...a.members],reviewer:h.targetId};
+    s.recoveredReview={handoffId:h.id,sourceHash:p.sourceHash,sourceDispatchId:h.fromDispatchId,versionId:m.versionId,workOrderRef:copy(p.workOrderRef)};
+    s.versionId=m.versionId;s.manifests[m.versionId]=copy(m);s.artifactRefs[m.versionId]=copy(p.refs);
+    h.reviewDraft={manifest:copy(m),refs:copy(p.refs)};h.evidenceRefs=copy(p.refs);
+    s.missing=[];s.status="pending";return s;
+  }
   if(event.type==="PERMISSIONS_OBSERVED") {
     s.permissions=[...new Set(p.members)];
     for(const d of Object.values(s.dispatches))if(d.status==="pending"&&!effectiveMembers(s,d.authorizationId).includes(d.targetId)){
@@ -109,10 +148,17 @@ export function apply(input, event) {
         (s.roles.confirmers??[]).length===2&&s.roles.confirmers.every(id=>signatureVerified(s,id)),
         "UNVERIFIED_SIGNATURES","原签核版本或终态未核实");
     }
+    if(recovery?.kind==="signed-resume"){
+      need(s.status==="stopped" && p.resumeStopped && recovery.versionId===s.versionId &&
+        s.roles.unattended && s.roles.confirmers?.length===2 && s.roles.confirmers.every(id=>p.authorization.members.includes(id) && effectiveMembers(s).includes(id)) &&
+        Object.values(s.dispatches).every(d=>["terminal","revoked"].includes(d.status)) &&
+        Object.keys(s.confirmations).length>0 && Object.keys(s.confirmations).every(id=>signatureVerified(s,id)),
+        "UNVERIFIED_SIGNATURES","续办前须核对当前版本、原签核、成员和终态");
+    }
     if(closed(s)){
       if(s.completion)s.completionHistory=[...(s.completionHistory??[]),s.completion];
       s.completion=null;
-      if(recovery?.kind!=="final-delivery")s.confirmations={};
+      if(!["final-delivery","signed-resume"].includes(recovery?.kind))s.confirmations={};
     }
     if(recovery?.kind==="legacy-cap") {
       need(!s.stop&&!!s.history?.sourceRef&&s.status==="completed","UNVERIFIED_HISTORY","旧任务结算证据缺失");
@@ -139,6 +185,21 @@ export function apply(input, event) {
     s.messages.push(p.messageRef);if(closed(s)||s.status==="pending-review"){s.status="pending";s.stop=null;s.missing=[];}
     return s;
   }
+  if(event.type==="REVIEW_REQUEUED"){
+    const d=s.dispatches[p.dispatchId],step=s.steps[s.currentStepId];
+    need(s.roles.unattended&&!s.stop&&!closed(s)&&d?.terminal?.status==="succeeded"&&d.stepId===step.stepId&&step.targetId===p.targetId,"REVIEW_ACTIVE","需要已结束且身份一致的审稿回合");
+    for(const id of step.handoffIds){const h=s.handoffs[id];h.status="pending";delete h.stepId;delete h.acceptedDispatchId;delete h.acceptedAt;}
+    return s;
+  }
+  if(event.type==="REQUIREMENTS_UPDATED"){
+    const step=s.steps[s.currentStepId];
+    need(s.roles.unattended&&!closed(s)&&!s.stop&&(!step||terminal(step.status)),"TASK_ACTIVE","只能在已核实的回合边界应用补充");
+    need((s.roles.writerFinalReview?p.authorization?.members?.every(id=>[...s.roles.confirmers,s.roles.delivererId].includes(id)&&effectiveMembers(s).includes(id))&&p.authorization.members.includes(s.roles.delivererId):p.authorization?.members?.length===2)&&s.roles.confirmers.every(id=>p.authorization.members.includes(id)&&effectiveMembers(s).includes(id)),"AUTH_REVOKED","补充要求的工作成员已变化");
+    s.authSnapshots[p.authorization.messageId]=copy(p.authorization);s.activeAuthorizationId=p.authorization.messageId;
+    s.messages.push(copy(p.messageRef));s.previousVersion=s.versionId??s.previousVersion;s.versionId=null;s.confirmations={};
+    for(const h of Object.values(s.handoffs))if(!["resolved","revoked"].includes(h.status))h.status="revoked";
+    s.status="pending";s.missing=[];return s;
+  }
   if(event.type==="SESSION_BOUND") {
     need(p.botId&&p.sessionId&&p.rootSessionId&&p.creationRelation,"MISSING_RELATION","缺少根会话或创建关系");
     const old=s.bindings[p.botId];
@@ -154,7 +215,7 @@ export function apply(input, event) {
       const h=s.handoffs[id];need(h&&h.targetId===p.targetId&&h.status==="pending","HANDOFF_MISMATCH","交接身份或状态不匹配");
       h.stepId=p.stepId;h.status="scheduled";
     }
-    s.steps[p.stepId]={stepId:p.stepId,targetId:p.targetId,authorizationId:p.authorizationId,
+    s.steps[p.stepId]={stepId:p.stepId,targetId:p.targetId,...(p.purpose==="final-delivery"?{purpose:p.purpose}:{}),authorizationId:p.authorizationId,
       order:s.order.length,status:"pending",handoffIds:p.handoffIds??[],attempts:{},currentAttemptId:null,
       automaticRecoveries:0,retrySources:[],payloadRef:p.payloadRef};
     s.order.push(p.stepId);s.currentStepId=p.stepId;s.status="pending";s.missing=[];return s;
@@ -249,7 +310,10 @@ export function apply(input, event) {
     need(s.steps[d.stepId].handoffIds.every(id=>s.handoffs[id]?.acceptedDispatchId===d.dispatchId),"HANDOFF_UNREAD","请先接收本棒交接");
     if(s.versionId!==m.versionId){s.confirmations={};s.versionId=m.versionId;}
     if(s.manifests[m.versionId])need(canonical(s.manifests[m.versionId])===canonical(m),"MANIFEST_IMMUTABLE","成果清单不可修改");
-    s.manifests[m.versionId]=m;s.artifactRefs[m.versionId]=[...(s.artifactRefs[m.versionId]??[]),...copy(p.evidenceRefs??[])].filter((ref,i,refs)=>refs.findIndex(v=>v.id===ref.id&&v.sourcePath===ref.sourcePath)===i);s.confirmations[d.targetId]={botId:d.targetId,versionId:m.versionId,dispatchId:d.dispatchId,at:event.at};
+    s.manifests[m.versionId]=m;s.artifactRefs[m.versionId]=[...(s.artifactRefs[m.versionId]??[]),...copy(p.evidenceRefs??[])].filter((ref,i,refs)=>refs.findIndex(v=>v.id===ref.id&&v.sourcePath===ref.sourcePath)===i);
+    if (!(s.roles.writerFinalReview && p.reviewDecision?.action==="revise")) {
+      s.confirmations[d.targetId]={botId:d.targetId,versionId:m.versionId,dispatchId:d.dispatchId,at:event.at};
+    }
     return s;
   }
   if(event.type==="ARTIFACT_INVALIDATED") {
@@ -346,12 +410,13 @@ export function apply(input, event) {
   if(event.type==="TASK_COMPLETED") {
     need(completionReady(s),"NOT_COMPLETE","双方同版本签核、成功终态或待办清理尚不满足");
     need(p.versionId===s.versionId,"VERSION_MISMATCH","完成版本不一致");
+    if(s.roles.delivererId&&s.manifests[s.versionId].evidence.some(ref=>ref.kind==="file")) need(p.delivery?.delivererId===s.roles.delivererId,"DELIVERER_MISMATCH","缺少指定交付人的文件回执");
     if(p.delivery) {
       const receipt=p.delivery;
       need(receipt.versionId===s.versionId&&receipt.reviewerId===s.roles.reviewer&&
         s.manifests[s.versionId].evidence.filter(ref=>ref.kind==="file").every(ref=>
           receipt.files?.some(file=>file.sha256===ref.sha256&&file.cardId&&
-            Object.values(s.dispatches).some(d=>d.runId===file.runId&&d.targetId===receipt.reviewerId&&d.terminal?.status==="succeeded"))),
+            Object.values(s.dispatches).some(d=>d.runId===file.runId&&d.targetId===(s.roles.delivererId??receipt.reviewerId)&&(!s.roles.delivererId||s.steps[d.stepId]?.purpose==="final-delivery")&&d.terminal?.status==="succeeded"))),
         "DELIVERY_MISMATCH","终审文件卡片与签核版本或回合不匹配");
     }
     s.status="completed";

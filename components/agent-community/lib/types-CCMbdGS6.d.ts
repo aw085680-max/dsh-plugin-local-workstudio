@@ -1483,6 +1483,7 @@ interface DeleteBotRequest {
   readonly id: string;
 }
 interface UpdateRoomRequest {
+  readonly expectedSettings?: string;
  readonly teamWorkflow?:BotRoom['teamWorkflow']|null;
   readonly id: string;
   /** [D-4] 队长：必须是本群成员；`null` 清除（回到按加入顺序派生）。 */

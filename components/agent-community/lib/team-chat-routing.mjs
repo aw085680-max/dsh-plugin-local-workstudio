@@ -15,8 +15,10 @@ const question = /^(?:请问|什么是|怎么理解|为什么|你觉得|你怎�
 const progress = /(?:做到哪了|做(?:到|完)哪一步|(?:进度|做到哪|做到哪一步)(?:如何|怎么样|了)?|(?:完成|做完|交付).{0,20}了吗|(?:当前|现在|目前).{0,16}(?:进度|到哪了))[？?。！!\s]*$/u;
 const roleStatement = /^(?:执行|复核|审核|监督|分析|开发|交付|测试)(?:方|人员|组|团队|者|人)\s*(?:已经|已|正在|目前|现在|还在|还没|尚未|刚刚|刚|说|表示|反馈|在等|在做|做完|干完|完成了)/u;
 const followOriginal = /(?:^|[。！？!?\n])\s*(?:请(?:你)?\s*)?按(?:照)?我(?:刚才|之前|前面)?(?:说|提)(?:过)?的(?:要求)?\s*(?:去做|做|执行|办理)[。！!\s]*$/u;
-const directive = /^(?:(?:先|把|将|对|为|用|根据|按(?:照)?|依据|对照|结合|针对)\s*[^，。！？?；;\n]{0,45}?)?(?:排查|修复|复核|检查|验证|复测|测试|制定|编写|撰写|拟定|整理|实现|完成|修改|更新|优化|升级|核对|迁移|部署|生成|分析|设计|总结|统计|交付|制作|执行|实施|安排|输出|出|进行|配置|跑|做|写|打开|读取|查看)(?<separator>\s*(?:[：:]\s*)?)(?<target>\S[\s\S]*)$/u;
+const directive = /^(?:(?:先|把|将|对|为|用|根据|按(?:照)?|依据|对照|结合|针对)\s*[^，。！？?；;\n]{0,45}?)?(?:核查|查日志|查阅|调查|排查|修复|复核|检查|验证|复测|测试|制定|编写|撰写|拟定|整理|实现|完成|修改|更新|优化|升级|核对|迁移|部署|生成|分析|设计|总结|统计|交付|制作|执行|实施|安排|输出|出|进行|配置|跑|做|写|打开|读取|查看)(?<separator>\s*(?:[：:]\s*)?)(?<target>\S[\s\S]*)$/u;
 const deliver = /(?:^|[，,；;。\n])\s*(?:请)?(?:交付|提交|产出|输出|生成)\s*([^。！？；;\n]+)\s*$/u;
+// A title following an explicit request names the deliverable; verbs inside the title are data.
+const titledDocumentRequest = /^(?:(?:请|麻烦)(?:你们?|您)?\s*)?(?:给我|帮我(?:写|整理)|整理|提交|交付|输出|起草|编写|拟定|写)\s*(?:一[份个篇])?\s*《[^《》\r\n]*?(?:方案|计划|报告|清单|文稿|执行稿|终稿)》(?=[\s，,。！!；;]|$)/u;
 const simpleChat = /^(?:你们\s*)?(?:一人一句|每个人(?:都)?(?:只)?(?:讲|说|回|回复)(?:一|1)句|每(?:人|个成员)(?:都)?(?:只)?(?:讲|说|回|回复)(?:一|1)句)/u;
 const serialChat = /(?:接力|轮流|依次|按顺序)(?:来|各|每人)?\s*(?:说|讲|回复|接话|接棒|回答|聊)|接龙|^(?:你们?\s*)?(?:接棒|继续接话)[。！!\s]*$/u;
 const relayCount = /^(?:我(?:先)?说)\s*(\d{1,6})\s*[,，、。]?\s*(?:然后|接下来)?\s*(?:请)?你们?\s*(?:接棒|接力|接龙|轮流)\s*(?:(?:说|数|报)?到\s*(\d{1,6}))?\s*[。！!\s]*$/u;
@@ -42,6 +44,22 @@ export function requestText(text, keepReference = false) {
   return first ? clauses.slice(first).join("，").trim() : body;
 }
 
+
+// A new upload plus an instruction to produce a reviewed document supplies its own subject.
+// A message that explicitly identifies an existing task keeps its normal continuation route.
+export function requestsAttachedDocument(body,input) {
+  if ((!input.groupDelegation && !input.managedGroup) || !input.attachments?.length || input.replyTo || input.threadId ||
+      input.taskId || input.continueTaskId) return false;
+  const text = body.replace(/“[^”]*”|「[^」]*」|『[^』]*』|"[^"]*"|\x60[^\x60]*\x60/gu,' ').trim();
+  if (/^(?:例如|假如|假设|如果|听说|据说|为什么|是否|不要|不用|不必|先别|别再)/u.test(text) ||
+      /[吗么呢][？?。]?$|[？?]$/u.test(text) || /(?:原单|旧单|原任务|旧任务|上一(?:张|个|项)任务)/u.test(text)) return false;
+  const product = /执行稿|终稿|正式稿|定稿|报告|方案|清单|计划书|手册|文稿|排班表/u;
+  const publish = /(?:提交|交付|输出|产出|交稿|交在|交回|发回|挂回|挂到|发到|给我|整理成|写成|形成|做成|编写|撰写|起草|拟定|制定|出一份)/u;
+  const work = /主笔|首做|起草|复核|审核|复审|审阅|审一遍|核查|核对|整理|编写|修订|完善|补齐|补全/u;
+  return product.test(text) && publish.test(text) && work.test(text) &&
+    !/(?:不必|不用|不要|无需|暂不|先别)\s*(?:再|另|给我)?\s*(?:提交|交付|输出|产出|交稿|写|起草|发|挂)/u.test(text);
+}
+
 export function classifyUserRequest(authoredBody, input = {}) {
   const hasLink = authoredBody.includes("\uFFFC");
   const routing = {...input, liveMessage:true, hasReference:!!input.hasReference || hasLink};
@@ -49,6 +67,17 @@ export function classifyUserRequest(authoredBody, input = {}) {
   // “能帮我整理清单吗” contains a direct request. A question asking about a task remains a chat.
   const politeAction=body.match(/^(?:(?:你们?|您)\s*)?(?:能不能|可不可以|能否|可以|能)\s*(?:帮我|替我|给我)\s*(.+?)(?:吗|么)?[？?。！!]*$/u);
   const text = politeAction?.[1]?.trim()||body;
+  if (!/[？?]/u.test(text) && !/^(?:别|不要|不用|无需|为什么|是否|如果|假如|他说|她说|据说|例如)/u.test(text)) {
+    if (input.managedGroup && titledDocumentRequest.test(text)) return {intent:"create", delivery:true, basis:text};
+    if (input.managedGroup && /(?:最后|然后|并|再|请|^|[。，,\n])\s*(?:你们?|请)?\s*(?:给我|交付|提交|交给我|输出)\s*(?:一份)?\s*(?:经|经过)?(?:双方|二人|两人)?(?:复核|审核|审定)(?:后|通过)?的?(?:执行稿|终稿|方案|报告)/u.test(text)) return {intent:"create", delivery:true, basis:text};
+    if (/^(?:两个|两项|这两[项个]|以上两项|前面两项).{0,8}(?:都要|都得|都需|都请|都).{0,6}(?:补充|补齐|补上|写进|加上)/u.test(text)) return {intent:"append",basis:text};
+    if (/(?:^|[，,。；;]\s*)(?:请)?(?:你们)?(?:给我|我要|帮我(?:写|出)|交付|提交|输出|形成|写|出|起草)(?:一[份个篇])?(?:[\p{L}\p{N}·、]{0,36})(?:方案|报告|计划|清单|文稿)(?:$|[。！!，,；;])/u.test(text) ||
+        /^(?:请)?(?:你们)?(?:核查|核对|调查|检查|复核).{0,50}(?:后|再)(?:一起)?交稿[。！!\s]*$/u.test(text)) return {intent:"create",delivery:true,basis:text};
+  }
+  // A conversational acknowledgement asks whether a message arrived. A referenced review does not turn it into a request for the review's status.
+  if (input.managedGroup && /(?:消息|这条|回复|点名)/u.test(text) &&
+      /(?:[能可]?(?:收到|看[到见])|收[到着]了?)(?:这条(?:消息)?|我的消息)?[吗么][？?。！!\s]*$/u.test(text) &&
+      !/(?:复核|返修|审核|送审|交稿|稿件|方案|版本|签收)/u.test(text)) return {intent:"chat",basis:text};
   const assessment=handoffSpeech(text,input.handoffContext),speech=assessment?.kind;
   if(speech==="chat")return {intent:"chat",basis:text};
   if(speech==="act"||returnIntent(text))return {intent:"return-review",basis:text,...(assessment?.recipientLabel?{recipientLabel:assessment.recipientLabel,recipientId:assessment.recipientId}:{})};
@@ -86,7 +115,8 @@ export function classifyGroupMessage(body, input = {}) {
   }
   if (followOriginal.test(text)) return {intent:"progress", followOriginal:true, basis:text};
   if (roleStatement.test(text)) return {intent:"chat", roleStatement:true, basis:text};
-  const count = text.match(relayCount);
+  const countBody = text.replace(/^(?:我们|咱们)?(?:来|玩)(?:一个|个)?小?(?:游戏|测试)\s*[，,。:：]\s*/u, "");
+  const count = countBody.match(relayCount);
   if (progress.test(text) || /^(?:完成|做完|交付).{0,28}了吗[？?]/u.test(text)) return {intent:"progress",basis:text};
   const ask = question.test(text) || /[？?]/u.test(text);
   const match = text.match(directive);
